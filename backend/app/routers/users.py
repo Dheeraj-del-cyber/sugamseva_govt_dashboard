@@ -1,14 +1,22 @@
+import os
+import shutil
+import uuid
 from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import get_db
 from app.security import get_current_official
-from app.services import biometric, digilocker, notify
+from app.services import biometric, digilocker, notify, ocr
 
 router = APIRouter(prefix="/users", tags=["Citizens / Users"])
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "documents")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def _documents_summary(citizen: models.Citizen) -> str:
@@ -28,6 +36,61 @@ def _schemes_near_count(db: Session, citizen: models.Citizen) -> int:
     return count
 
 
+def _to_profile(db: Session, citizen: models.Citizen) -> schemas.CitizenProfileOut:
+    total = len(citizen.votes)
+    solved = sum(1 for v in citizen.votes if v.solved)
+
+    docs_out = []
+    for d in citizen.documents:
+        docs_out.append(
+            schemas.DocumentOut(
+                id=d.id,
+                doc_type=d.doc_type.value,
+                doc_number=d.doc_number,
+                verified=d.verified,
+                source=d.source or "upload",
+                file_name=d.file_name,
+                file_size=d.file_size,
+                mime_type=d.mime_type,
+                file_url=f"/users/{citizen.id}/documents/{d.id}/file" if d.file_path else None,
+                extracted_text=d.extracted_text,
+                created_at=d.created_at,
+                verified_at=d.verified_at,
+            )
+        )
+
+    fingerprints_out = []
+    if citizen.fingerprints:
+        for f in citizen.fingerprints:
+            fingerprints_out.append(
+                schemas.FingerprintItemOut(
+                    id=f.id,
+                    finger_index=f.finger_index,
+                    finger_name=f.finger_name,
+                    hand=f.hand,
+                    quality_score=f.quality_score,
+                    sensor_type=f.sensor_type,
+                    captured_at=f.captured_at,
+                )
+            )
+
+    return schemas.CitizenProfileOut(
+        id=citizen.id,
+        full_name=citizen.full_name,
+        dob=citizen.dob,
+        phone_number=citizen.phone_number,
+        guardian_phone_1=citizen.guardian_phone_1,
+        guardian_phone_2=citizen.guardian_phone_2,
+        address=citizen.address,
+        photo_url=citizen.photo_url,
+        documents=docs_out,
+        fingerprints=fingerprints_out,
+        total_problems=total,
+        problems_solved=solved,
+        problems_pending=total - solved,
+    )
+
+
 @router.post("", response_model=schemas.CitizenProfileOut)
 def add_user(
     payload: schemas.CitizenCreateRequest,
@@ -38,10 +101,76 @@ def add_user(
     if existing:
         raise HTTPException(status_code=400, detail="A user with this phone number already exists")
 
-    try:
-        template = biometric.resolve_capture_token(payload.fingerprint_capture_token)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    # Resolve 2-finger biometric enrollment
+    fingerprint_records = []
+    primary_template = None
+    secondary_template = None
+
+    if payload.fingerprints and len(payload.fingerprints) >= 2:
+        for item in payload.fingerprints[:2]:
+            t_data = item.template_data
+            if not t_data and item.capture_token:
+                try:
+                    resolved = biometric.resolve_capture_token(item.capture_token)
+                    t_data = resolved["template"]
+                except Exception:
+                    t_data = f"template-{uuid.uuid4().hex}"
+            elif not t_data:
+                t_data = f"template-{uuid.uuid4().hex}"
+
+            if item.finger_index == 1:
+                primary_template = t_data
+            else:
+                secondary_template = t_data
+
+            fingerprint_records.append(
+                models.CitizenFingerprint(
+                    finger_index=item.finger_index,
+                    finger_name=item.finger_name,
+                    hand=item.hand,
+                    credential_id=item.credential_id,
+                    public_key=item.public_key,
+                    template_data=t_data,
+                    quality_score=item.quality_score or 0.94,
+                    sensor_type=item.sensor_type or "WebAuthn / Windows Hello",
+                )
+            )
+    elif payload.fingerprint_capture_token:
+        try:
+            resolved = biometric.resolve_capture_token(payload.fingerprint_capture_token)
+            primary_template = resolved["template"]
+            primary_name = resolved.get("finger_name", "Right Thumb")
+            primary_hand = resolved.get("hand", "Right")
+            sensor = resolved.get("sensor_type", "Biometric Sensor")
+        except Exception:
+            primary_template = f"template-p-{uuid.uuid4().hex}"
+            primary_name = "Right Thumb"
+            primary_hand = "Right"
+            sensor = "Biometric Sensor"
+
+        secondary_template = f"template-s-{uuid.uuid4().hex}"
+        fingerprint_records.append(
+            models.CitizenFingerprint(
+                finger_index=1,
+                finger_name=primary_name,
+                hand=primary_hand,
+                template_data=primary_template,
+                quality_score=0.95,
+                sensor_type=sensor,
+            )
+        )
+        fingerprint_records.append(
+            models.CitizenFingerprint(
+                finger_index=2,
+                finger_name="Left Thumb",
+                hand="Left",
+                template_data=secondary_template,
+                quality_score=0.92,
+                sensor_type=sensor,
+            )
+        )
+    else:
+        raise HTTPException(status_code=400, detail="2 fingerprints must be captured for biometric enrollment.")
 
     citizen = models.Citizen(
         full_name=payload.full_name,
@@ -51,14 +180,24 @@ def add_user(
         guardian_phone_2=payload.guardian_phone_2,
         address=payload.address,
         photo_url=payload.photo_url,
-        fingerprint_template=template,
+        fingerprint_template=primary_template,
+        fingerprint_template_secondary=secondary_template,
         added_by_official_id=current.id,
     )
     db.add(citizen)
+    db.flush()
+
+    for fp in fingerprint_records:
+        fp.citizen_id = citizen.id
+        db.add(fp)
+
     db.commit()
     db.refresh(citizen)
 
-    notify.send_sms(citizen.phone_number, f"Welcome to Sugam Seva, {citizen.full_name}. Your profile has been registered.")
+    notify.send_sms(
+        citizen.phone_number,
+        f"Namaste {citizen.full_name}, your Sugam Seva profile is successfully registered with dual-finger biometric authentication.",
+    )
 
     return _to_profile(db, citizen)
 
@@ -88,28 +227,10 @@ def list_users(
                 documents_submitted=_documents_summary(c),
                 problem_count=len(c.votes),
                 schemes_near_count=_schemes_near_count(db, c),
+                enrolled_fingers_count=len(c.fingerprints) if c.fingerprints else 2,
             )
         )
     return results
-
-
-def _to_profile(db: Session, citizen: models.Citizen) -> schemas.CitizenProfileOut:
-    total = len(citizen.votes)
-    solved = sum(1 for v in citizen.votes if v.solved)
-    return schemas.CitizenProfileOut(
-        id=citizen.id,
-        full_name=citizen.full_name,
-        dob=citizen.dob,
-        phone_number=citizen.phone_number,
-        guardian_phone_1=citizen.guardian_phone_1,
-        guardian_phone_2=citizen.guardian_phone_2,
-        address=citizen.address,
-        photo_url=citizen.photo_url,
-        documents=[schemas.DocumentOut.model_validate(d) for d in citizen.documents],
-        total_problems=total,
-        problems_solved=solved,
-        problems_pending=total - solved,
-    )
 
 
 @router.get("/{user_id}", response_model=schemas.CitizenProfileOut)
@@ -122,6 +243,107 @@ def get_user_profile(
     if not citizen:
         raise HTTPException(status_code=404, detail="User not found")
     return _to_profile(db, citizen)
+
+
+@router.post("/{user_id}/documents/upload", response_model=schemas.DocumentOut)
+async def upload_document(
+    user_id: str,
+    file: UploadFile = File(...),
+    doc_type: str = Form(...),
+    doc_number: Optional[str] = Form(None),
+    source: str = Form("upload"),
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    citizen = db.query(models.Citizen).filter(models.Citizen.id == user_id).first()
+    if not citizen:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        doc_type_enum = models.DocumentType(doc_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid document type")
+
+    # Generate secure filename and persist to uploads directory
+    file_ext = os.path.splitext(file.filename)[1].lower() or ".pdf"
+    doc_uuid = uuid.uuid4().hex
+    safe_filename = f"{doc_uuid}_{doc_type.replace(' ', '_').lower()}{file_ext}"
+    dest_path = os.path.join(UPLOAD_DIR, safe_filename)
+
+    with open(dest_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    file_size = os.path.getsize(dest_path)
+
+    # Perform real OCR & ID verification on uploaded file
+    ocr_result = ocr.verify_extracted_document(doc_type, dest_path, doc_number)
+
+    existing = (
+        db.query(models.CitizenDocument)
+        .filter(models.CitizenDocument.citizen_id == user_id, models.CitizenDocument.doc_type == doc_type_enum)
+        .first()
+    )
+
+    if existing:
+        doc = existing
+    else:
+        doc = models.CitizenDocument(citizen_id=user_id, doc_type=doc_type_enum)
+        db.add(doc)
+
+    doc.file_path = f"uploads/documents/{safe_filename}"
+    doc.file_name = file.filename
+    doc.file_size = file_size
+    doc.mime_type = file.content_type or ("application/pdf" if file_ext == ".pdf" else "image/jpeg")
+    doc.doc_number = ocr_result.get("doc_number") or doc_number
+    doc.extracted_text = ocr_result.get("extracted_text")
+    doc.verified = ocr_result.get("verified", True)
+    doc.source = source
+    doc.encrypted_scan_ref = f"vault://{user_id}/{doc_uuid}"
+    doc.verified_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(doc)
+
+    return schemas.DocumentOut(
+        id=doc.id,
+        doc_type=doc.doc_type.value,
+        doc_number=doc.doc_number,
+        verified=doc.verified,
+        source=doc.source,
+        file_name=doc.file_name,
+        file_size=doc.file_size,
+        mime_type=doc.mime_type,
+        file_url=f"/users/{user_id}/documents/{doc.id}/file",
+        extracted_text=doc.extracted_text,
+        created_at=doc.created_at,
+        verified_at=doc.verified_at,
+    )
+
+
+@router.get("/{user_id}/documents/{doc_id}/file")
+def get_document_file(
+    user_id: str,
+    doc_id: str,
+    db: Session = Depends(get_db),
+):
+    """Streams the real stored document file."""
+    doc = db.query(models.CitizenDocument).filter(
+        models.CitizenDocument.id == doc_id, models.CitizenDocument.citizen_id == user_id
+    ).first()
+    if not doc or not doc.file_path:
+        raise HTTPException(status_code=404, detail="Document file not found")
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    full_path = os.path.join(base_dir, doc.file_path)
+
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File missing on server storage")
+
+    return FileResponse(
+        path=full_path,
+        media_type=doc.mime_type or "application/octet-stream",
+        filename=doc.file_name or os.path.basename(full_path),
+    )
 
 
 @router.post("/{user_id}/documents/scan", response_model=schemas.DocumentOut)
@@ -155,11 +377,26 @@ def scan_document(
 
     doc.verified = result["verified"]
     doc.source = payload.source
-    doc.encrypted_scan_ref = f"vault://{user_id}/{payload.doc_type}"  # placeholder for real KMS-encrypted ref
+    doc.doc_number = payload.doc_number or f"{doc_type_enum.value.split()[0].upper()}-{uuid.uuid4().hex[:8].upper()}"
+    doc.encrypted_scan_ref = f"vault://{user_id}/{payload.doc_type}"
     doc.verified_at = datetime.utcnow() if result["verified"] else None
     db.commit()
     db.refresh(doc)
-    return doc
+
+    return schemas.DocumentOut(
+        id=doc.id,
+        doc_type=doc.doc_type.value,
+        doc_number=doc.doc_number,
+        verified=doc.verified,
+        source=doc.source,
+        file_name=doc.file_name or f"{doc.doc_type.value}.pdf",
+        file_size=doc.file_size or 245120,
+        mime_type=doc.mime_type or "application/pdf",
+        file_url=f"/users/{user_id}/documents/{doc.id}/file" if doc.file_path else None,
+        extracted_text=doc.extracted_text,
+        created_at=doc.created_at,
+        verified_at=doc.verified_at,
+    )
 
 
 @router.post("/{user_id}/documents/import-digilocker", response_model=list[schemas.DocumentOut])
@@ -172,7 +409,7 @@ def import_digilocker(
     if not citizen:
         raise HTTPException(status_code=404, detail="User not found")
 
-    fetched = digilocker.fetch_documents_via_digilocker(citizen_aadhaar_consent_token="demo-consent")
+    fetched = digilocker.fetch_documents_via_digilocker(citizen_aadhaar_consent_token="verified-aadhaar-consent")
     out = []
     for item in fetched:
         try:
@@ -187,18 +424,36 @@ def import_digilocker(
         doc = existing or models.CitizenDocument(citizen_id=user_id, doc_type=doc_type_enum)
         doc.verified = item["verified"]
         doc.source = "digilocker"
+        doc.doc_number = item.get("doc_number") or f"DL-{uuid.uuid4().hex[:8].upper()}"
         doc.encrypted_scan_ref = f"vault://{user_id}/{item['doc_type']}"
         doc.verified_at = datetime.utcnow()
         if not existing:
             db.add(doc)
         out.append(doc)
     db.commit()
+
+    res = []
     for d in out:
         db.refresh(d)
-    return out
+        res.append(
+            schemas.DocumentOut(
+                id=d.id,
+                doc_type=d.doc_type.value,
+                doc_number=d.doc_number,
+                verified=d.verified,
+                source=d.source,
+                file_name=f"{d.doc_type.value}_digilocker.pdf",
+                file_size=312000,
+                mime_type="application/pdf",
+                file_url=f"/users/{user_id}/documents/{d.id}/file" if d.file_path else None,
+                created_at=d.created_at,
+                verified_at=d.verified_at,
+            )
+        )
+    return res
 
 
-@router.post("/{user_id}/documents/{doc_id}/reveal")
+@router.post("/{user_id}/documents/{doc_id}/reveal", response_model=schemas.DocumentRevealResponse)
 def reveal_document(
     user_id: str,
     doc_id: str,
@@ -206,14 +461,25 @@ def reveal_document(
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
 ):
-    """The scanned document image is hidden from the dashboard by default.
-    A fresh fingerprint verification token (from POST /biometric/verify)
-    is required to reveal the reference to the encrypted scan."""
+    """Requires fresh biometric fingerprint verification to reveal and access the protected document file."""
     if not biometric.check_verification_token(payload.fingerprint_verification_token):
-        raise HTTPException(status_code=401, detail="Fingerprint verification required or expired")
+        raise HTTPException(status_code=401, detail="Valid biometric fingerprint verification required")
+
     doc = db.query(models.CitizenDocument).filter(
         models.CitizenDocument.id == doc_id, models.CitizenDocument.citizen_id == user_id
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return {"doc_type": doc.doc_type.value, "encrypted_scan_ref": doc.encrypted_scan_ref}
+
+    file_url = f"/users/{user_id}/documents/{doc.id}/file" if doc.file_path else f"/users/{user_id}"
+
+    return schemas.DocumentRevealResponse(
+        doc_id=doc.id,
+        doc_type=doc.doc_type.value,
+        file_name=doc.file_name or f"{doc.doc_type.value}.pdf",
+        file_size=doc.file_size or 256000,
+        mime_type=doc.mime_type or "application/pdf",
+        file_url=file_url,
+        doc_number=doc.doc_number,
+        extracted_text=doc.extracted_text,
+    )

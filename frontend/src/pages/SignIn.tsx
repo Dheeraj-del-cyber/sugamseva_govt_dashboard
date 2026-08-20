@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Fingerprint, Eye, EyeOff, ShieldCheck, Globe } from "lucide-react";
+import { Fingerprint, Eye, EyeOff, ShieldCheck, Globe, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
+import { captureFromSensor } from "../lib/biometricSensor";
 
 export default function SignIn() {
   const { login } = useAuth();
@@ -13,6 +14,7 @@ export default function SignIn() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
+  const [bioSuccess, setBioSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,18 +32,26 @@ export default function SignIn() {
 
   const handleBiometricLogin = async () => {
     if (!govtId) {
-      setError("Enter your Government ID first, then verify using fingerprint");
+      setError("Please enter your Government ID (e.g. GOV-IN-100234) first, then verify via fingerprint");
       return;
     }
     setBioLoading(true);
     setError("");
     try {
-      const { data } = await api.post(`/auth/login-biometric`, null, { params: { govt_id: govtId } });
+      // 1. Capture live sensor read
+      await captureFromSensor("webauthn", "Right Thumb", "Right", "official");
+
+      // 2. Call backend
+      const { data } = await api.post("/auth/login-biometric", null, { params: { govt_id: govtId } });
+      setBioSuccess(true);
       localStorage.setItem("sugamseva_token", data.access_token);
       localStorage.setItem("sugamseva_official", JSON.stringify(data.official));
-      navigate("/dashboard");
+
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 500);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Biometric verification failed");
+      setError(err?.response?.data?.detail || "Biometric authentication failed. Ensure you are registered.");
     } finally {
       setBioLoading(false);
     }
@@ -75,15 +85,15 @@ export default function SignIn() {
             Sugam Seva
           </h1>
           <p className="mt-3 text-white/70 max-w-sm">
-            Digital Citizen Assistant for multilingual access to government services and schemes.
+            Digital Citizen Assistant for multilingual access to national government services, schemes and civic grievance redressal.
           </p>
 
           <div className="tricolor-rule w-24 rounded-full mt-8" />
         </div>
 
-        <div className="relative z-10 flex items-center gap-2 text-xs text-white/50">
+        <div className="relative z-10 flex items-center gap-2 text-xs text-white/60">
           <Fingerprint size={16} />
-          Biometric-secured official access
+          Biometric Hardware Protected (Windows Hello / Touch ID / STQC RD Service)
         </div>
       </div>
 
@@ -96,8 +106,8 @@ export default function SignIn() {
             </button>
           </div>
 
-          <h2 className="font-display text-2xl font-bold text-ink-900">Welcome Back!</h2>
-          <p className="text-sm text-ink-500 mt-1">Sign in to continue to the official dashboard</p>
+          <h2 className="font-display text-2xl font-bold text-ink-900">Government Portal Sign In</h2>
+          <p className="text-sm text-ink-500 mt-1">Official Dashboard for Service Delivery &amp; Civic Governance</p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <label className="block">
@@ -105,7 +115,7 @@ export default function SignIn() {
               <input
                 value={govtId}
                 onChange={(e) => setGovtId(e.target.value)}
-                placeholder="GOV-IN-XXXXXX"
+                placeholder="e.g. GOV-IN-100234"
                 required
                 className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
                 style={{ borderColor: "var(--color-ink-300)" }}
@@ -136,7 +146,7 @@ export default function SignIn() {
             </label>
 
             {error && (
-              <p className="text-xs font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: "var(--color-red-100)", color: "var(--color-red-600)" }}>
+              <p className="text-xs font-medium px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-200">
                 {error}
               </p>
             )}
@@ -147,28 +157,43 @@ export default function SignIn() {
               className="w-full rounded-lg py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: "var(--color-gov-blue-600)" }}
             >
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? "Signing in..." : "Sign In with Credentials"}
             </button>
           </form>
 
-          <div className="mt-6 rounded-xl border p-4 flex items-center gap-3" style={{ borderColor: "var(--color-ink-300)" }}>
-            <div
-              className="h-10 w-10 rounded-full flex items-center justify-center shrink-0"
-              style={{ backgroundColor: "var(--color-gov-blue-100)", color: "var(--color-gov-blue-600)" }}
-            >
-              <Fingerprint size={20} />
+          {/* Biometric Instant Authentication */}
+          <div className="mt-6 rounded-2xl border border-ink-200 p-4 bg-ink-50 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  bioSuccess
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gov-blue-100 text-gov-blue-700"
+                }`}
+              >
+                {bioSuccess ? <CheckCircle2 size={22} /> : <Fingerprint size={22} />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-ink-900">Biometric Sensor Login</p>
+                <p className="text-[11px] text-ink-500">Windows Hello / Touch ID / STQC Device</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-ink-900">Biometric Authentication</p>
-              <p className="text-xs text-ink-500">Verify using fingerprint</p>
-            </div>
+
             <button
+              type="button"
               onClick={handleBiometricLogin}
-              disabled={bioLoading}
-              className="text-xs font-semibold px-3 py-2 rounded-lg border disabled:opacity-50"
-              style={{ borderColor: "var(--color-gov-blue-600)", color: "var(--color-gov-blue-600)" }}
+              disabled={bioLoading || bioSuccess}
+              className="text-xs font-bold px-3.5 py-2 rounded-lg border border-gov-blue-600 text-gov-blue-700 bg-white hover:bg-gov-blue-50 disabled:opacity-50 transition-colors shrink-0"
             >
-              {bioLoading ? "Verifying..." : "Verify"}
+              {bioLoading ? (
+                <span className="flex items-center gap-1">
+                  <RefreshCw size={12} className="animate-spin" /> Verifying...
+                </span>
+              ) : bioSuccess ? (
+                "Verified!"
+              ) : (
+                "Verify Finger"
+              )}
             </button>
           </div>
 
@@ -179,8 +204,8 @@ export default function SignIn() {
             </Link>
           </p>
 
-          <p className="mt-10 text-center text-[11px] text-ink-500">
-            &copy; Government of India 2026. All rights reserved.
+          <p className="mt-8 text-center text-[11px] text-ink-400">
+            Demo Government IDs: <span className="font-mono text-ink-700 font-bold">GOV-IN-100234</span>, <span className="font-mono text-ink-700 font-bold">GOV-IN-100235</span> (Pass: <span className="font-mono font-bold">Password@123</span>)
           </p>
         </div>
       </div>

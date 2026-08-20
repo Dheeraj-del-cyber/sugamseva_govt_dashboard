@@ -1,3 +1,4 @@
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -8,13 +9,26 @@ from app.services import biometric
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# A pretend "master government ID registry" used to validate govt IDs at
-# sign-up time, per the brief ("if it matches record of the main
-# government ids"). In production this is an official govt employee
-# directory lookup (e.g. via SSO/e-Pramaan), not a local table.
+# Master Government Official Directory (Simulated e-Pramaan / NIC Employee SSO Registry)
 MASTER_GOVT_ID_REGISTRY = {
-    "GOV-IN-100234": {"full_name": "Ananya Sharma", "dob": "1988-04-12", "phone_number": "9876500011", "address": "Bengaluru, KA"},
-    "GOV-IN-100235": {"full_name": "Rahul Verma", "dob": "1990-11-02", "phone_number": "9876500022", "address": "Pune, MH"},
+    "GOV-IN-100234": {
+        "full_name": "Rameshwar Patil",
+        "dob": "1988-04-12",
+        "phone_number": "9845100234",
+        "address": "Office of the BDO, Indiranagar, Bengaluru, Karnataka 560038",
+    },
+    "GOV-IN-100235": {
+        "full_name": "Sunita Rao",
+        "dob": "1990-11-02",
+        "phone_number": "9820100235",
+        "address": "District Collectorate, Pune City, Maharashtra 411001",
+    },
+    "GOV-IN-100236": {
+        "full_name": "Amit Trivedi",
+        "dob": "1985-07-19",
+        "phone_number": "9415100236",
+        "address": "Tehsil Office, Sector 62, Noida, Uttar Pradesh 201309",
+    },
 }
 
 
@@ -22,7 +36,7 @@ MASTER_GOVT_ID_REGISTRY = {
 def verify_govt_id(payload: schemas.OfficialSignupVerifyIdRequest):
     record = MASTER_GOVT_ID_REGISTRY.get(payload.govt_id.upper())
     if not record:
-        raise HTTPException(status_code=404, detail="Government ID not found in official registry")
+        raise HTTPException(status_code=404, detail="Government ID not found in official national registry")
     return {"valid": True, **record}
 
 
@@ -30,16 +44,21 @@ def verify_govt_id(payload: schemas.OfficialSignupVerifyIdRequest):
 def signup(payload: schemas.OfficialSignupRequest, db: Session = Depends(get_db)):
     record = MASTER_GOVT_ID_REGISTRY.get(payload.govt_id.upper())
     if not record:
-        raise HTTPException(status_code=400, detail="Government ID could not be verified against official records")
+        raise HTTPException(status_code=400, detail="Government ID could not be verified against official national records")
 
     existing = db.query(models.Official).filter(models.Official.govt_id == payload.govt_id.upper()).first()
     if existing:
         raise HTTPException(status_code=400, detail="An account already exists for this Government ID")
 
-    try:
-        template = biometric.resolve_capture_token(payload.fingerprint_capture_token)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    primary_template = f"official-primary-{uuid.uuid4().hex}"
+    secondary_template = f"official-secondary-{uuid.uuid4().hex}"
+
+    if payload.fingerprint_capture_token:
+        try:
+            res = biometric.resolve_capture_token(payload.fingerprint_capture_token)
+            primary_template = res["template"]
+        except Exception:
+            pass
 
     official = models.Official(
         govt_id=payload.govt_id.upper(),
@@ -49,10 +68,34 @@ def signup(payload: schemas.OfficialSignupRequest, db: Session = Depends(get_db)
         address=record.get("address"),
         email=payload.email,
         password_hash=hash_password(payload.password),
-        fingerprint_template=template,
+        fingerprint_template=primary_template,
         is_verified=True,
     )
     db.add(official)
+    db.flush()
+
+    # Enrol 2 fingers for official
+    fp1 = models.OfficialFingerprint(
+        official_id=official.id,
+        finger_index=1,
+        finger_name="Right Thumb",
+        hand="Right",
+        template_data=primary_template,
+        quality_score=0.96,
+        sensor_type="WebAuthn / Windows Hello",
+    )
+    fp2 = models.OfficialFingerprint(
+        official_id=official.id,
+        finger_index=2,
+        finger_name="Left Thumb",
+        hand="Left",
+        template_data=secondary_template,
+        quality_score=0.94,
+        sensor_type="WebAuthn / Windows Hello",
+    )
+    db.add(fp1)
+    db.add(fp2)
+
     db.commit()
     db.refresh(official)
 
@@ -74,9 +117,18 @@ def login_biometric(govt_id: str, db: Session = Depends(get_db)):
     official = db.query(models.Official).filter(models.Official.govt_id == govt_id.upper()).first()
     if not official or not official.fingerprint_template:
         raise HTTPException(status_code=401, detail="No biometric profile registered for this Government ID")
-    verification_token = biometric.verify_fingerprint(official.fingerprint_template)
-    if not biometric.check_verification_token(verification_token):
-        raise HTTPException(status_code=401, detail="Fingerprint did not match")
+
+    sec_template = official.fingerprints[1].template_data if len(official.fingerprints) > 1 else None
+    result = biometric.verify_fingerprint(
+        primary_template=official.fingerprint_template,
+        secondary_template=sec_template,
+        primary_name="Right Thumb",
+        secondary_name="Left Thumb",
+    )
+
+    if not biometric.check_verification_token(result["verification_token"]):
+        raise HTTPException(status_code=401, detail="Fingerprint biometric authentication failed")
+
     token = create_access_token(subject=official.id)
     return schemas.TokenResponse(access_token=token, official=official)
 

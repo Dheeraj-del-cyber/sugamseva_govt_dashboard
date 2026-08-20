@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Fingerprint, ShieldCheck, CheckCircle2, ScanLine } from "lucide-react";
+import { ShieldCheck, CheckCircle2, ScanLine } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import FingerprintEnrollment from "../components/FingerprintEnrollment";
+import { EnrolledFinger } from "../lib/biometricSensor";
 
 type VerifiedRecord = {
   full_name: string;
@@ -24,8 +26,7 @@ export default function SignUp() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [captureToken, setCaptureToken] = useState<string | null>(null);
-  const [capturing, setCapturing] = useState(false);
+  const [enrolledFingers, setEnrolledFingers] = useState<EnrolledFinger[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -38,30 +39,9 @@ export default function SignUp() {
       const { data } = await api.post("/auth/verify-govt-id", { govt_id: govtId });
       setRecord(data);
     } catch (err: any) {
-      setVerifyError(err?.response?.data?.detail || "Government ID could not be verified");
+      setVerifyError(err?.response?.data?.detail || "Government ID could not be verified in the national registry");
     } finally {
       setVerifying(false);
-    }
-  };
-
-  const handleCaptureFingerprint = async () => {
-    setCapturing(true);
-    try {
-      // Capture is normally gated behind login, but at sign-up time there is
-      // no session yet - in production this hits an unauthenticated
-      // device-pairing endpoint. Demo mode simulates it directly here.
-      const { data } = await api.post("/biometric/capture", null, {
-        params: { subject_hint: "official" },
-        headers: { Authorization: undefined },
-      }).catch(async () => {
-        // fallback: still call it, backend demo mode doesn't strictly need auth logic here
-        return api.post("/biometric/capture", null, { params: { subject_hint: "official" } });
-      });
-      setCaptureToken(data.fingerprint_capture_token);
-    } catch {
-      setCaptureToken(`demo-capture-${Date.now()}`);
-    } finally {
-      setCapturing(false);
     }
   };
 
@@ -76,10 +56,11 @@ export default function SignUp() {
       setSubmitError("Passwords do not match");
       return;
     }
-    if (!captureToken) {
-      setSubmitError("Please capture your fingerprint to continue");
+    if (enrolledFingers.length < 2) {
+      setSubmitError("Please enroll both 2 required fingerprints (Primary & Secondary)");
       return;
     }
+
     setSubmitting(true);
     try {
       const { data } = await api.post("/auth/signup", {
@@ -88,10 +69,20 @@ export default function SignUp() {
         dob: record.dob,
         phone_number: record.phone_number,
         address: record.address,
-        email,
+        email: email || undefined,
         password,
-        fingerprint_capture_token: captureToken,
+        fingerprints: enrolledFingers.map((f) => ({
+          finger_index: f.finger_index,
+          finger_name: f.finger_name,
+          hand: f.hand,
+          capture_token: f.capture_token,
+          credential_id: f.credential_id,
+          quality_score: f.quality_score,
+          sensor_type: f.sensor_type,
+        })),
+        fingerprint_capture_token: enrolledFingers[0]?.capture_token,
       });
+
       localStorage.setItem("sugamseva_token", data.access_token);
       setOfficial(data.official);
       navigate("/dashboard");
@@ -115,14 +106,14 @@ export default function SignUp() {
       </div>
 
       <div className="w-full max-w-2xl bg-white rounded-2xl border border-ink-100 shadow-sm p-6 sm:p-10">
-        <h2 className="font-display text-2xl font-bold text-center text-ink-900">Create New Account</h2>
-        <p className="text-sm text-ink-500 text-center mt-1">Register as a verified government official</p>
+        <h2 className="font-display text-2xl font-bold text-center text-ink-900">Create Official Account</h2>
+        <p className="text-sm text-ink-500 text-center mt-1">Register as a verified government official with dual-finger biometric security</p>
         <div className="tricolor-rule w-16 rounded-full mx-auto mt-4" />
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-8">
           {/* Section 1: Government Identity */}
           <section>
-            <p className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-3">1. Government Identity</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-3">1. Government Identity Verification</p>
             <div className="flex gap-2">
               <input
                 value={govtId}
@@ -130,7 +121,7 @@ export default function SignUp() {
                   setGovtId(e.target.value);
                   setRecord(null);
                 }}
-                placeholder="GOV-IN-XXXXXX"
+                placeholder="e.g. GOV-IN-100236"
                 required
                 className="flex-1 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
                 style={{ borderColor: "var(--color-ink-300)" }}
@@ -145,34 +136,31 @@ export default function SignUp() {
                 {verifying ? "Verifying..." : "Verify ID"}
               </button>
             </div>
-            {verifyError && <p className="text-xs mt-2" style={{ color: "var(--color-red-600)" }}>{verifyError}</p>}
+            {verifyError && <p className="text-xs mt-2 text-red-600">{verifyError}</p>}
             {record && (
-              <div
-                className="mt-3 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium"
-                style={{ backgroundColor: "var(--color-green-100)", color: "var(--color-green-600)" }}
-              >
+              <div className="mt-3 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium bg-green-100 text-green-700">
                 <CheckCircle2 size={16} /> Government ID verified &mdash; {record.full_name}
               </div>
             )}
           </section>
 
-          {/* Section 2: Official Details (auto-filled, read-only, from registry) */}
+          {/* Section 2: Official Details */}
           {record && (
             <section>
-              <p className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-3">2. Official Details</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-3">2. Official Directory Information</p>
               <div className="grid sm:grid-cols-2 gap-4">
                 <ReadOnlyField label="Full Name" value={record.full_name} />
                 <ReadOnlyField label="Date of Birth" value={record.dob} />
                 <ReadOnlyField label="Phone Number" value={record.phone_number} />
-                <ReadOnlyField label="Address" value={record.address} />
+                <ReadOnlyField label="Office Location / Address" value={record.address} />
               </div>
               <label className="block mt-4">
-                <span className="text-xs font-semibold text-ink-700">Email (optional)</span>
+                <span className="text-xs font-semibold text-ink-700">Official Email</span>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@gov.in"
+                  placeholder="e.g. official@gov.in"
                   className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
                   style={{ borderColor: "var(--color-ink-300)" }}
                 />
@@ -186,7 +174,7 @@ export default function SignUp() {
               <p className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-3">3. Account Security</p>
               <div className="grid sm:grid-cols-2 gap-4">
                 <label className="block">
-                  <span className="text-xs font-semibold text-ink-700">Password *</span>
+                  <span className="text-xs font-semibold text-ink-700">Create Password *</span>
                   <input
                     type="password"
                     required
@@ -197,7 +185,7 @@ export default function SignUp() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold text-ink-700">Re-enter Password *</span>
+                  <span className="text-xs font-semibold text-ink-700">Confirm Password *</span>
                   <input
                     type="password"
                     required
@@ -211,42 +199,21 @@ export default function SignUp() {
             </section>
           )}
 
-          {/* Section 4: Biometric */}
+          {/* Section 4: Dual-Finger Biometric Sensor Enrollment */}
           {record && (
             <section>
-              <p className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-3">4. Biometric Authentication</p>
-              <div className="rounded-xl border p-5 flex flex-col items-center text-center gap-3" style={{ borderColor: "var(--color-ink-300)" }}>
-                <div
-                  className="h-16 w-16 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: captureToken ? "var(--color-green-100)" : "var(--color-gov-blue-100)" }}
-                >
-                  {captureToken ? (
-                    <CheckCircle2 size={28} style={{ color: "var(--color-green-600)" }} />
-                  ) : (
-                    <Fingerprint size={28} style={{ color: "var(--color-gov-blue-600)" }} />
-                  )}
-                </div>
-                <p className="text-sm font-semibold text-ink-900">
-                  {captureToken ? "Fingerprint Verified" : "Capture your fingerprint"}
-                </p>
-                <p className="text-xs text-ink-500 max-w-xs">
-                  Place your finger on the biometric device to complete registration securely.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleCaptureFingerprint}
-                  disabled={capturing || !!captureToken}
-                  className="text-xs font-semibold px-4 py-2 rounded-lg border disabled:opacity-50"
-                  style={{ borderColor: "var(--color-gov-blue-600)", color: "var(--color-gov-blue-600)" }}
-                >
-                  {capturing ? "Capturing..." : captureToken ? "Captured" : "Capture Fingerprint"}
-                </button>
-              </div>
+              <p className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-3">
+                4. Dual-Finger Biometric Authentication (Sensor Capture)
+              </p>
+              <FingerprintEnrollment
+                onEnrollmentComplete={(f) => setEnrolledFingers(f)}
+                userHint="official"
+              />
             </section>
           )}
 
           {submitError && (
-            <p className="text-xs font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: "var(--color-red-100)", color: "var(--color-red-600)" }}>
+            <p className="text-xs font-medium px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-200">
               {submitError}
             </p>
           )}
@@ -260,7 +227,7 @@ export default function SignUp() {
                 setEmail("");
                 setPassword("");
                 setConfirmPassword("");
-                setCaptureToken(null);
+                setEnrolledFingers([]);
               }}
               className="flex-1 rounded-lg py-3 text-sm font-semibold border"
               style={{ borderColor: "var(--color-ink-300)", color: "var(--color-navy-900)" }}
@@ -269,11 +236,11 @@ export default function SignUp() {
             </button>
             <button
               type="submit"
-              disabled={submitting || !record}
+              disabled={submitting || !record || enrolledFingers.length < 2}
               className="flex-[2] rounded-lg py-3 text-sm font-semibold text-white disabled:opacity-50"
               style={{ backgroundColor: "var(--color-gov-blue-600)" }}
             >
-              {submitting ? "Creating account..." : "Create Account"}
+              {submitting ? "Registering Official..." : "Complete Official Registration"}
             </button>
           </div>
         </form>
@@ -286,7 +253,7 @@ export default function SignUp() {
         </p>
       </div>
       <p className="mt-6 text-[11px] text-ink-500 flex items-center gap-1.5">
-        <ScanLine size={12} /> Try demo Government IDs: GOV-IN-100234 or GOV-IN-100235
+        <ScanLine size={12} /> Available demo Government IDs: GOV-IN-100234, GOV-IN-100235, GOV-IN-100236
       </p>
     </div>
   );
@@ -296,7 +263,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <span className="text-xs font-semibold text-ink-700">{label}</span>
-      <div className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm bg-ink-100 text-ink-700" style={{ borderColor: "var(--color-ink-300)" }}>
+      <div className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm bg-ink-100 text-ink-800 font-medium" style={{ borderColor: "var(--color-ink-300)" }}>
         {value}
       </div>
     </div>

@@ -31,8 +31,7 @@ def list_schemes_near_people(
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
 ):
-    """One row per citizen (per the brief: user name, eligible scheme
-    count, documents matched)."""
+    """One row per citizen (user name, eligible scheme count, documents matched)."""
     citizens = db.query(models.Citizen).all()
     if search:
         like = search.lower()
@@ -51,7 +50,7 @@ def list_schemes_near_people(
         results.append(
             schemas.SchemeListItem(
                 sl_no=i,
-                id=c.id,  # citizen id, front-end links to citizen's eligible scheme list
+                id=c.id,
                 name=c.full_name,
                 eligible_count=len(eligible),
                 documents_matched=", ".join(sorted(verified_types)) or "None",
@@ -63,7 +62,17 @@ def list_schemes_near_people(
 @router.get("/catalog")
 def scheme_catalog(db: Session = Depends(get_db), current: models.Official = Depends(get_current_official)):
     schemes = db.query(models.Scheme).all()
-    return [{"id": s.id, "name": s.name, "category": s.category, "active": s.active} for s in schemes]
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "category": s.category,
+            "ministry": s.ministry,
+            "benefit_amount": s.benefit_amount,
+            "active": s.active,
+        }
+        for s in schemes
+    ]
 
 
 @router.get("/{scheme_id}", response_model=schemas.SchemeDetailOut)
@@ -93,6 +102,9 @@ def get_scheme_detail(scheme_id: str, db: Session = Depends(get_db), current: mo
     return schemas.SchemeDetailOut(
         id=scheme.id,
         name=scheme.name,
+        category=scheme.category,
+        ministry=scheme.ministry,
+        benefit_amount=scheme.benefit_amount,
         summary=summary,
         pros=pros,
         cons=cons,
@@ -164,7 +176,7 @@ def apply_scheme(
     for cid in applied:
         citizen = db.query(models.Citizen).filter(models.Citizen.id == cid).first()
         if citizen:
-            notify.send_sms(citizen.phone_number, f"You have been applied for the scheme: {scheme.name}.")
+            notify.send_sms(citizen.phone_number, f"Namaste! Your application for '{scheme.name}' has been successfully submitted.")
 
     return {"status": "applied", "applied_count": len(applied)}
 

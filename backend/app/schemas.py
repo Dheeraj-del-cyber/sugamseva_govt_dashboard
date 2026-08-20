@@ -9,6 +9,31 @@ class OfficialSignupVerifyIdRequest(BaseModel):
     govt_id: str
 
 
+class FingerprintEnrollmentItem(BaseModel):
+    finger_index: int = Field(..., description="1 for primary, 2 for secondary")
+    finger_name: str = Field(..., description="e.g. Right Thumb, Left Thumb, Right Index")
+    hand: str = Field(default="Right", description="Right or Left")
+    capture_token: Optional[str] = None
+    credential_id: Optional[str] = None
+    public_key: Optional[str] = None
+    template_data: Optional[str] = None
+    quality_score: float = Field(default=0.92, description="Sensor quality score 0.0 - 1.0")
+    sensor_type: str = Field(default="WebAuthn / Windows Hello")
+
+
+class FingerprintItemOut(BaseModel):
+    id: str
+    finger_index: int
+    finger_name: str
+    hand: str
+    quality_score: float
+    sensor_type: str
+    captured_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class OfficialSignupRequest(BaseModel):
     govt_id: str
     full_name: str
@@ -17,7 +42,8 @@ class OfficialSignupRequest(BaseModel):
     address: Optional[str] = None
     email: Optional[str] = None
     password: str
-    fingerprint_capture_token: str  # returned by /biometric/capture
+    fingerprint_capture_token: Optional[str] = None
+    fingerprints: Optional[List[FingerprintEnrollmentItem]] = None
 
 
 class OfficialLoginRequest(BaseModel):
@@ -35,6 +61,7 @@ class OfficialOut(BaseModel):
     address: Optional[str]
     photo_url: Optional[str]
     is_verified: bool
+    fingerprints: Optional[List[FingerprintItemOut]] = []
 
     class Config:
         from_attributes = True
@@ -64,9 +91,16 @@ class PasswordChangeRequest(BaseModel):
 class DocumentOut(BaseModel):
     id: str
     doc_type: str
+    doc_number: Optional[str] = None
     verified: bool
     source: str
-    verified_at: Optional[datetime]
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    file_url: Optional[str] = None
+    extracted_text: Optional[str] = None
+    created_at: Optional[datetime] = None
+    verified_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -80,7 +114,8 @@ class CitizenCreateRequest(BaseModel):
     guardian_phone_2: Optional[str] = None
     address: Optional[str] = None
     photo_url: Optional[str] = None
-    fingerprint_capture_token: str
+    fingerprint_capture_token: Optional[str] = None
+    fingerprints: Optional[List[FingerprintEnrollmentItem]] = None  # 2 fingers required
 
 
 class CitizenListItem(BaseModel):
@@ -91,6 +126,7 @@ class CitizenListItem(BaseModel):
     documents_submitted: str
     problem_count: int
     schemes_near_count: int
+    enrolled_fingers_count: int = 2
 
 
 class CitizenProfileOut(BaseModel):
@@ -103,6 +139,7 @@ class CitizenProfileOut(BaseModel):
     address: Optional[str]
     photo_url: Optional[str]
     documents: List[DocumentOut]
+    fingerprints: List[FingerprintItemOut] = []
     total_problems: int
     problems_solved: int
     problems_pending: int
@@ -110,11 +147,23 @@ class CitizenProfileOut(BaseModel):
 
 class DocumentScanRequest(BaseModel):
     doc_type: str
-    source: str = "scan"  # "scan" or "digilocker"
+    source: str = "scan"  # "scan", "upload" or "digilocker"
+    doc_number: Optional[str] = None
 
 
 class DocumentRevealRequest(BaseModel):
     fingerprint_verification_token: str
+
+
+class DocumentRevealResponse(BaseModel):
+    doc_id: str
+    doc_type: str
+    file_name: Optional[str]
+    file_size: Optional[int]
+    mime_type: Optional[str]
+    file_url: str
+    doc_number: Optional[str]
+    extracted_text: Optional[str]
 
 
 # ---------- Problems ----------------------------------------------
@@ -128,8 +177,10 @@ class ProblemListItem(BaseModel):
     sl_no: int
     id: str
     title: str
+    category: Optional[str] = None
     total_votes: int
     solved_votes: int
+    is_solved: bool = False
 
     class Config:
         from_attributes = True
@@ -143,6 +194,7 @@ class ProblemDetailOut(BaseModel):
     id: str
     title: str
     description: Optional[str]
+    category: Optional[str] = None
     total_votes: int
     solved_votes: int
     is_solved: bool
@@ -155,6 +207,7 @@ class ProblemAffectedUser(BaseModel):
     phone_number: str
     address: Optional[str]
     voted_at: datetime
+    solved: bool = False
 
 
 class MarkSolvedRequest(BaseModel):
@@ -167,6 +220,9 @@ class SchemeListItem(BaseModel):
     sl_no: int
     id: str
     name: str
+    category: Optional[str] = None
+    ministry: Optional[str] = None
+    benefit_amount: Optional[str] = None
     eligible_count: int
     documents_matched: str
 
@@ -174,6 +230,9 @@ class SchemeListItem(BaseModel):
 class SchemeDetailOut(BaseModel):
     id: str
     name: str
+    category: Optional[str] = None
+    ministry: Optional[str] = None
+    benefit_amount: Optional[str] = None
     summary: Optional[str]
     pros: List[str]
     cons: List[str]
@@ -191,17 +250,28 @@ class AISuggestionRequest(BaseModel):
     citizen_id: str
 
 
-# ---------- Biometric / Documents mock services ------------------------
+# ---------- Biometric Services ----------------------------------------
 class BiometricCaptureResponse(BaseModel):
     fingerprint_capture_token: str
     quality_score: float
+    finger_name: Optional[str] = "Right Thumb"
+    hand: Optional[str] = "Right"
+    sensor_type: str = "WebAuthn / Windows Hello"
+    template_preview_hash: str
 
 
 class BiometricVerifyRequest(BaseModel):
     subject_type: str  # "citizen" or "official"
     subject_id: str
+    finger_index: Optional[int] = None  # Optional: 1 (Primary) or 2 (Secondary)
+    live_token: Optional[str] = None
+    credential_id: Optional[str] = None
 
 
 class BiometricVerifyResponse(BaseModel):
     verified: bool
     verification_token: Optional[str] = None
+    matched_finger_name: Optional[str] = None
+    hand: Optional[str] = None
+    quality_score: Optional[float] = None
+    message: str = "Biometric authenticated successfully"
