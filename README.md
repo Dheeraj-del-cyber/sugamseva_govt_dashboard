@@ -13,7 +13,7 @@ sugam-seva/
 ├── backend/          FastAPI + SQLAlchemy + PostgreSQL API
 │   ├── app/
 │   │   ├── routers/       auth, officials, users, problems, schemes, dashboard, biometric
-│   │   ├── services/      biometric, digilocker, ocr, ai (Claude), notify (SMS/FCM)
+│   │   ├── services/      biometric, ocr, ai (Claude), notify (SMS/FCM)
 │   │   ├── models.py      SQLAlchemy ORM models
 │   │   ├── schemas.py     Pydantic request/response schemas
 │   │   ├── security.py    JWT auth + password hashing
@@ -89,7 +89,7 @@ docker compose up --build
 | Backend | Python + FastAPI |
 | Database | PostgreSQL (SQLite by default for zero-config local dev) |
 | AI | Claude LLM API (scheme summaries + suggestions) |
-| Document verification | DigiLocker + APISetu (mocked), PaddleOCR (mocked) |
+| Document verification | PaddleOCR (mocked) |
 | Biometric | Fingerprint capture/verification (mocked, swappable for a certified RD-service device) |
 | Notifications | SMS Gateway + Firebase FCM (mocked) |
 | Deployment | Docker, docker-compose (Kubernetes/NIC MeghRaj manifests can be layered on top) |
@@ -100,10 +100,6 @@ Several of the integrations you listed **require credentials and partnerships
 that only your organisation can obtain** — they can't be fabricated or reverse
 engineered:
 
-- **DigiLocker / APISetu** — needs a registered organisation account and
-  OAuth2 client credentials from https://partners.digitallocker.gov.in, plus
-  citizen consent flows.
-- **Bhashini** — needs an API key from https://bhashini.gov.in.
 - **Biometric hardware** — a real Aadhaar-grade fingerprint match needs an
   STQC-certified RD-service device driver; this can't be simulated in software.
 - **SMS Gateway / Firebase** — needs your own gateway account / Firebase
@@ -138,8 +134,8 @@ credentials into `.env` and flip `DEMO_MODE=false` once you're onboarded.
 
 ## Next steps to take this to production
 
-1. Get DigiLocker/APISetu, Bhashini, SMS gateway, and Firebase credentials and
-   drop them into `backend/.env`, then set `DEMO_MODE=false`.
+1. Get SMS gateway and Firebase credentials and drop them into
+   `backend/.env`, then set `DEMO_MODE=false`.
 2. Swap SQLite for PostgreSQL (already the default in `docker-compose.yml`)
    and run Alembic migrations instead of `Base.metadata.create_all`.
 3. Put Keycloak in front of `/auth` for proper SSO/RBAC across officials.
