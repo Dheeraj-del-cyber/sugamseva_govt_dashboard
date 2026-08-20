@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import {
   Fingerprint,
   Lock,
@@ -63,9 +63,13 @@ interface Profile {
 
 export default function UserProfile() {
   const { userId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [matchedFingerName, setMatchedFingerName] = useState<string | null>(null);
+  const [revealedDocs, setRevealedDocs] = useState<Record<string, DocumentOut>>({});
+  const [unlocking, setUnlocking] = useState(false);
+  const [digilockerBanner, setDigilockerBanner] = useState(false);
 
   // Modals
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -87,9 +91,42 @@ export default function UserProfile() {
     loadProfile();
   }, [userId]);
 
-  const handleBiometricSuccess = (token: string, matchedFinger: string) => {
-    setUnlocked(true);
-    setMatchedFingerName(matchedFinger);
+  useEffect(() => {
+    if (searchParams.get("digilocker") === "success") {
+      setDigilockerBanner(true);
+      loadProfile();
+      searchParams.delete("digilocker");
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleBiometricSuccess = async (token: string, matchedFinger: string) => {
+    if (!userId || !profile) return;
+    setUnlocking(true);
+    try {
+      // One fresh fingerprint scan mints a fingerprint-verification-token that
+      // is used to reveal every document in the vault - the server still
+      // requires that token (via /reveal) to mint the actual file access
+      // token, so nothing is viewable without this scan having happened.
+      const results = await Promise.all(
+        profile.documents.map((d) =>
+          api
+            .post(`/users/${userId}/documents/${d.id}/reveal`, { fingerprint_verification_token: token })
+            .then(({ data }) => ({ id: d.id, doc: { ...d, file_url: data.file_url, file_name: data.file_name, file_size: data.file_size, mime_type: data.mime_type, extracted_text: data.extracted_text } }))
+            .catch(() => null)
+        )
+      );
+      const map: Record<string, DocumentOut> = {};
+      results.forEach((r) => {
+        if (r) map[r.id] = r.doc;
+      });
+      setRevealedDocs(map);
+      setUnlocked(true);
+      setMatchedFingerName(matchedFinger);
+    } finally {
+      setUnlocking(false);
+    }
   };
 
   const handleUploadAdditionalDoc = async (e: React.FormEvent) => {
@@ -140,6 +177,18 @@ export default function UserProfile() {
   return (
     <Layout title="Citizen Profile" backTo={{ to: "/users", label: "Back to Users" }}>
       <div className="max-w-4xl mx-auto space-y-6">
+        {digilockerBanner && (
+          <div className="rounded-xl p-3.5 bg-green-100/70 border border-green-200 text-green-900 text-xs font-medium flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-green-600 shrink-0" />
+              <span>Documents imported from DigiLocker successfully.</span>
+            </div>
+            <button type="button" onClick={() => setDigilockerBanner(false)} className="font-bold underline text-green-950">
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Header Card */}
         <Card className="p-6 flex flex-col sm:flex-row items-center sm:items-start justify-between gap-5 text-center sm:text-left">
           <div className="flex flex-col sm:flex-row items-center gap-5">
@@ -335,19 +384,23 @@ export default function UserProfile() {
                     {d.file_name || `${d.doc_type}.pdf`}
                   </span>
 
-                  {unlocked ? (
+                  {unlocked && revealedDocs[d.id] ? (
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => setSelectedDocForView(d)}
+                        onClick={() => setSelectedDocForView(revealedDocs[d.id])}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-white transition-colors"
                         style={{ backgroundColor: "var(--color-gov-blue-600)" }}
                       >
                         <Eye size={12} /> View File
                       </button>
-                      {d.file_url && (
+                      {revealedDocs[d.id].file_url && (
                         <a
-                          href={d.file_url.startsWith("http") ? d.file_url : `${API_BASE_URL}${d.file_url}`}
+                          href={
+                            revealedDocs[d.id].file_url!.startsWith("http")
+                              ? revealedDocs[d.id].file_url!
+                              : `${API_BASE_URL}${revealedDocs[d.id].file_url}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           download={d.file_name || `${d.doc_type}.pdf`}
@@ -386,10 +439,11 @@ export default function UserProfile() {
               <button
                 type="button"
                 onClick={() => setShowVerifyModal(true)}
-                className="mt-1 inline-flex items-center gap-2 text-xs font-bold px-5 py-2.5 rounded-xl text-white shadow-sm hover:opacity-95 transition-all"
+                disabled={unlocking}
+                className="mt-1 inline-flex items-center gap-2 text-xs font-bold px-5 py-2.5 rounded-xl text-white shadow-sm hover:opacity-95 transition-all disabled:opacity-60"
                 style={{ backgroundColor: "var(--color-navy-900)" }}
               >
-                <Fingerprint size={16} /> Authenticate with Fingerprint Sensor
+                <Fingerprint size={16} /> {unlocking ? "Verifying Fingerprint..." : "Authenticate with Fingerprint Sensor"}
               </button>
             </div>
           ) : (
@@ -402,7 +456,10 @@ export default function UserProfile() {
               </div>
               <button
                 type="button"
-                onClick={() => setUnlocked(false)}
+                onClick={() => {
+                  setUnlocked(false);
+                  setRevealedDocs({});
+                }}
                 className="font-bold underline text-green-950"
               >
                 Lock Vault

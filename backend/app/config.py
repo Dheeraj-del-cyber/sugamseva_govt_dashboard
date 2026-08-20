@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     DIGILOCKER_CLIENT_ID: str = ""
     DIGILOCKER_CLIENT_SECRET: str = ""
     DIGILOCKER_BASE_URL: str = "https://api.digitallocker.gov.in"
+    DIGILOCKER_REDIRECT_URI: str = "http://localhost:8000/digilocker/callback"
+    # Where to send the official's browser back to after the DigiLocker
+    # consent flow completes (the dashboard's Add User page).
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
 
     BHASHINI_API_KEY: str = ""
     BHASHINI_USER_ID: str = ""

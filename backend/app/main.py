@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import auth, officials, users, problems, schemes, dashboard, biometric_router
+from app.routers import auth, officials, users, problems, schemes, dashboard, biometric_router, digilocker_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -25,10 +25,12 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(officials.router)
 app.include_router(users.router)
+app.include_router(users.documents_router)
 app.include_router(problems.router)
 app.include_router(schemes.router)
 app.include_router(dashboard.router)
 app.include_router(biometric_router.router)
+app.include_router(digilocker_router.router)
 
 
 @app.get("/")

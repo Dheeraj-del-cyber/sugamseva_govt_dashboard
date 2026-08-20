@@ -15,6 +15,7 @@ from app.config import settings
 # In-memory storage for short-lived tokens
 _capture_tokens: dict[str, dict[str, Any]] = {}
 _verify_tokens: dict[str, dict[str, Any]] = {}
+_file_access_tokens: dict[str, dict[str, Any]] = {}
 
 
 def capture_fingerprint(
@@ -106,13 +107,40 @@ def verify_fingerprint(
 
 
 def check_verification_token(token: str) -> bool:
-    """Validate and consume verification token."""
+    """Validate a fresh-fingerprint-scan verification token. Reusable for its
+    3-minute window (so one scan can unlock several documents in the vault),
+    but it always expires quickly and can never be replayed after that."""
     record = _verify_tokens.get(token)
     if not record:
         return False
     if time.time() > record["expiry"]:
         _verify_tokens.pop(token, None)
         return False
-    # single use token for maximum security
-    _verify_tokens.pop(token, None)
     return True
+
+
+def issue_file_access_token(doc_id: str) -> str:
+    """Mint a short-lived, document-scoped access token after a fresh fingerprint
+    verification. Required on every request to actually stream document bytes -
+    this is the real server-side enforcement of 'fingerprint required to access
+    documents', not just a client-side UI gate."""
+    token = secrets.token_urlsafe(28)
+    _file_access_tokens[token] = {
+        "doc_id": doc_id,
+        "expiry": time.time() + 600,  # valid 10 minutes - enough to view + download
+    }
+    return token
+
+
+def check_file_access_token(token: str, doc_id: str) -> bool:
+    """Validate a document-scoped file access token minted after fingerprint
+    verification. Does not single-use-expire so the same viewer/download link
+    keeps working for the token's window, but it is tied to one specific
+    document id and always expires."""
+    record = _file_access_tokens.get(token)
+    if not record:
+        return False
+    if time.time() > record["expiry"]:
+        _file_access_tokens.pop(token, None)
+        return False
+    return record["doc_id"] == doc_id

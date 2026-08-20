@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -14,9 +14,33 @@ from app.security import get_current_official
 from app.services import biometric, digilocker, notify, ocr
 
 router = APIRouter(prefix="/users", tags=["Citizens / Users"])
+documents_router = APIRouter(prefix="/documents", tags=["Documents"])
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "documents")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# The canonical set of document/"card" types that appear across every
+# government scheme's required_documents list. This is the single source of
+# truth the frontend's searchable upload picker is built from, so it always
+# matches exactly what the backend (and every Scheme.required_documents
+# value) actually recognises.
+DOCUMENT_TYPE_CATALOG = [
+    {"name": "Aadhaar Card", "description": "12-digit Unique Identification Authority of India (UIDAI) national identity number"},
+    {"name": "PAN Card", "description": "Permanent Account Number issued by the Income Tax Department"},
+    {"name": "Passport", "description": "Ministry of External Affairs travel and identity document"},
+    {"name": "Voter ID", "description": "Election Commission of India Electors Photo Identity Card (EPIC)"},
+    {"name": "Driving Licence", "description": "State Transport Authority driving licence"},
+    {"name": "Ration Card", "description": "Food & Civil Supplies Department household ration card"},
+    {"name": "Income Certificate", "description": "Revenue Department certified proof of annual income"},
+    {"name": "Land Records", "description": "Khatauni / Record of Rights (RoR) / 7-12 extract land ownership proof"},
+]
+
+
+@documents_router.get("/types")
+def list_document_types(current: models.Official = Depends(get_current_official)):
+    """All document/card types recognised across every government scheme -
+    what the Add User document vault lets an official search and upload."""
+    return DOCUMENT_TYPE_CATALOG
 
 
 def _documents_summary(citizen: models.Citizen) -> str:
@@ -324,9 +348,16 @@ async def upload_document(
 def get_document_file(
     user_id: str,
     doc_id: str,
+    access_token: str = Query(..., description="File access token minted by /reveal after a fresh fingerprint scan"),
     db: Session = Depends(get_db),
 ):
-    """Streams the real stored document file."""
+    """Streams the real stored document file. Per Government of India security
+    policy, this always requires a valid access_token minted by /reveal after
+    a fresh biometric fingerprint verification - there is no way to fetch a
+    document's bytes without one, even with a valid staff login."""
+    if not biometric.check_file_access_token(access_token, doc_id):
+        raise HTTPException(status_code=401, detail="Fingerprint verification required to access this document")
+
     doc = db.query(models.CitizenDocument).filter(
         models.CitizenDocument.id == doc_id, models.CitizenDocument.citizen_id == user_id
     ).first()
@@ -471,7 +502,11 @@ def reveal_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    file_url = f"/users/{user_id}/documents/{doc.id}/file" if doc.file_path else f"/users/{user_id}"
+    if doc.file_path:
+        file_access_token = biometric.issue_file_access_token(doc.id)
+        file_url = f"/users/{user_id}/documents/{doc.id}/file?access_token={file_access_token}"
+    else:
+        file_url = f"/users/{user_id}"
 
     return schemas.DocumentRevealResponse(
         doc_id=doc.id,
