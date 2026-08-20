@@ -464,3 +464,40 @@ def reveal_document(
         doc_number=doc.doc_number,
         extracted_text=doc.extracted_text,
     )
+
+
+@router.delete("/{user_id}/documents/{doc_id}")
+def delete_document(
+    user_id: str,
+    doc_id: str,
+    payload: schemas.DocumentDeleteRequest,
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    """Deletes a citizen's uploaded document, both the database record and
+    the stored file on disk. Per Government of India security policy this
+    requires the same fresh biometric fingerprint verification as viewing
+    the document - an official cannot delete a citizen's document without
+    the citizen re-verifying on the sensor first."""
+    if not biometric.check_verification_token(payload.fingerprint_verification_token):
+        raise HTTPException(status_code=401, detail="Valid biometric fingerprint verification required")
+
+    doc = db.query(models.CitizenDocument).filter(
+        models.CitizenDocument.id == doc_id, models.CitizenDocument.citizen_id == user_id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.file_path:
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        full_path = os.path.join(base_dir, doc.file_path)
+        if os.path.exists(full_path):
+            try:
+                os.remove(full_path)
+            except OSError:
+                pass
+
+    db.delete(doc)
+    db.commit()
+
+    return {"deleted": True, "doc_id": doc_id}

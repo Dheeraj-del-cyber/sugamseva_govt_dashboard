@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   X,
   Download,
@@ -5,6 +6,10 @@ import {
   CheckCircle2,
   ExternalLink,
   ShieldCheck,
+  RefreshCcw,
+  Trash2,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { API_BASE_URL } from "../api/client";
 
@@ -21,10 +26,37 @@ interface Props {
     file_url?: string;
     extracted_text?: string;
   } | null;
+  /** Uploads a replacement file for the currently-viewed document. */
+  onChangeDocument?: (file: File) => void | Promise<void>;
+  /** Deletes the currently-viewed document. */
+  onDeleteDocument?: () => void | Promise<void>;
+  /** True while a replacement upload is in progress. */
+  changing?: boolean;
 }
 
-export default function DocumentViewerModal({ isOpen, onClose, document }: Props) {
+export default function DocumentViewerModal({
+  isOpen,
+  onClose,
+  document,
+  onChangeDocument,
+  onDeleteDocument,
+  changing,
+}: Props) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   if (!isOpen || !document) return null;
+
+  const handleDeleteConfirmed = async () => {
+    if (!onDeleteDocument) return;
+    setDeleting(true);
+    try {
+      await onDeleteDocument();
+    } finally {
+      setDeleting(false);
+      setConfirmingDelete(false);
+    }
+  };
 
   const rawUrl = document.file_url || "";
   const fullUrl = rawUrl.startsWith("http") ? rawUrl : `${API_BASE_URL}${rawUrl}`;
@@ -75,6 +107,40 @@ export default function DocumentViewerModal({ isOpen, onClose, document }: Props
             >
               <ExternalLink size={13} /> Open Tab
             </a>
+            {onChangeDocument && (
+              <label
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-xs font-semibold text-ink-700 hover:bg-ink-100 transition-colors cursor-pointer ${
+                  changing ? "opacity-40 pointer-events-none" : ""
+                }`}
+              >
+                {changing ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <RefreshCcw size={13} />
+                )}
+                Change
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  className="hidden"
+                  disabled={changing}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onChangeDocument(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+            {onDeleteDocument && (
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 size={13} /> Delete
+              </button>
+            )}
             <button
               onClick={onClose}
               className="h-8 w-8 rounded-lg flex items-center justify-center text-ink-400 hover:text-ink-900 hover:bg-ink-200 transition-colors ml-1"
@@ -83,6 +149,37 @@ export default function DocumentViewerModal({ isOpen, onClose, document }: Props
             </button>
           </div>
         </div>
+
+        {/* Delete confirmation banner */}
+        {confirmingDelete && (
+          <div className="px-6 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-red-700">
+              <AlertTriangle size={15} className="shrink-0" />
+              <span>
+                Permanently delete this {document.doc_type}? This cannot be undone.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-ink-700 hover:bg-white transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirmed}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-60"
+              >
+                {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content Viewer Body */}
         <div className="flex-1 overflow-auto bg-ink-100/70 p-4 flex items-center justify-center min-h-[420px]">

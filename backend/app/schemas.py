@@ -166,6 +166,10 @@ class DocumentRevealResponse(BaseModel):
     extracted_text: Optional[str]
 
 
+class DocumentDeleteRequest(BaseModel):
+    fingerprint_verification_token: str
+
+
 # ---------- Problems ----------------------------------------------
 class ProblemCreateRequest(BaseModel):
     title: str

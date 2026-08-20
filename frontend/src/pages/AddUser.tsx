@@ -14,6 +14,7 @@ import { Card, PrimaryButton, SecondaryButton, TextField } from "../components/U
 import FingerprintEnrollment from "../components/FingerprintEnrollment";
 import BiometricVerifyModal from "../components/BiometricVerifyModal";
 import DocumentViewerModal from "../components/DocumentViewerModal";
+import LocationAutocomplete from "../components/LocationAutocomplete";
 import type { EnrolledFinger } from "../lib/biometricSensor";
 import { api } from "../api/client";
 
@@ -61,6 +62,9 @@ export default function AddUser() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [selectedDocForView, setSelectedDocForView] = useState<any>(null);
   const [revealing, setRevealing] = useState(false);
+  // Kept for the modal's lifetime so "Change Document" / "Delete Document"
+  // (also fingerprint-gated) don't need a second sensor scan for the same session.
+  const [activeVerificationToken, setActiveVerificationToken] = useState<string | null>(null);
 
   const [createdUserId, setCreatedUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -158,6 +162,7 @@ export default function AddUser() {
         `/users/${createdUserId}/documents/${pendingViewDocId}/reveal`,
         { fingerprint_verification_token: token }
       );
+      setActiveVerificationToken(token);
       setSelectedDocForView({
         id: data.doc_id,
         doc_type: data.doc_type,
@@ -173,6 +178,58 @@ export default function AddUser() {
     } finally {
       setRevealing(false);
       setPendingViewDocId(null);
+    }
+  };
+
+  // Replace the currently-viewed document's file (still fingerprint-gated -
+  // only reachable once the citizen has verified to open the viewer).
+  const handleChangeDocument = async (file: File) => {
+    if (!createdUserId || !selectedDocForView) return;
+    const docType = selectedDocForView.doc_type;
+    setUploadingDoc(docType);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("doc_type", docType);
+      formData.append("source", "upload");
+
+      const { data } = await api.post(`/users/${createdUserId}/documents/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setUploadedDocs((prev) => [...prev.filter((d) => d.doc_type !== docType), data]);
+      setSelectedDocForView({
+        id: data.id,
+        doc_type: data.doc_type,
+        doc_number: data.doc_number,
+        file_name: data.file_name,
+        file_size: data.file_size,
+        mime_type: data.mime_type,
+        file_url: data.file_url,
+        extracted_text: data.extracted_text,
+      });
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || `Failed to replace ${docType}`);
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
+  // Delete the currently-viewed document (fingerprint-gated on the server
+  // too, using the same verification token that unlocked the viewer).
+  const handleDeleteDocument = async () => {
+    if (!createdUserId || !selectedDocForView || !activeVerificationToken) return;
+    const docId = selectedDocForView.id;
+    setError("");
+    try {
+      await api.delete(`/users/${createdUserId}/documents/${docId}`, {
+        data: { fingerprint_verification_token: activeVerificationToken },
+      });
+      setUploadedDocs((prev) => prev.filter((d) => d.id !== docId));
+      setSelectedDocForView(null);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to delete document. Please try again.");
     }
   };
 
@@ -255,11 +312,11 @@ export default function AddUser() {
                 onChange={(e) => setGuardian2(e.target.value)}
                 placeholder="Secondary guardian mobile"
               />
-              <TextField
+              <LocationAutocomplete
                 label="Complete Residential Address"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="House/Street, Ward, City, State, PIN Code"
+                onChange={setAddress}
+                placeholder="Start typing a place, e.g. Hassan..."
               />
             </div>
 
@@ -471,8 +528,14 @@ export default function AddUser() {
 
       <DocumentViewerModal
         isOpen={Boolean(selectedDocForView)}
-        onClose={() => setSelectedDocForView(null)}
+        onClose={() => {
+          setSelectedDocForView(null);
+          setActiveVerificationToken(null);
+        }}
         document={selectedDocForView}
+        onChangeDocument={handleChangeDocument}
+        onDeleteDocument={handleDeleteDocument}
+        changing={uploadingDoc === selectedDocForView?.doc_type}
       />
     </Layout>
   );
