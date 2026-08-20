@@ -11,6 +11,8 @@ import {
 import {
   captureFromSensor,
   getAvailableSensors,
+} from "../lib/biometricSensor";
+import type {
   SensorInfo,
   EnrolledFinger,
 } from "../lib/biometricSensor";

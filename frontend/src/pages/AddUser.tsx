@@ -11,7 +11,7 @@ import {
 import Layout from "../components/Layout";
 import { Card, PrimaryButton, SecondaryButton, TextField } from "../components/UI";
 import FingerprintEnrollment from "../components/FingerprintEnrollment";
-import { EnrolledFinger } from "../lib/biometricSensor";
+import type { EnrolledFinger } from "../lib/biometricSensor";
 import { api } from "../api/client";
 
 const DOCUMENT_TYPES = [

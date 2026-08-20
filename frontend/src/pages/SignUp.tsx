@@ -4,7 +4,7 @@ import { ShieldCheck, CheckCircle2, ScanLine } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import FingerprintEnrollment from "../components/FingerprintEnrollment";
-import { EnrolledFinger } from "../lib/biometricSensor";
+import type { EnrolledFinger } from "../lib/biometricSensor";
 
 type VerifiedRecord = {
   full_name: string;
