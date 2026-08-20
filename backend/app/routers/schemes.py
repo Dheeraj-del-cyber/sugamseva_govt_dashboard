@@ -19,7 +19,7 @@ def _eligible_citizens(db: Session, scheme: models.Scheme) -> list[models.Citize
     citizens = db.query(models.Citizen).all()
     eligible = []
     for c in citizens:
-        verified_types = {d.doc_type.value for d in c.documents if d.verified}
+        verified_types = {d.doc_type for d in c.documents if d.verified}
         if required.issubset(verified_types):
             eligible.append(c)
     return eligible
@@ -40,7 +40,7 @@ def list_schemes_near_people(
     schemes = db.query(models.Scheme).filter(models.Scheme.active == True).all()  # noqa: E712
     results = []
     for i, c in enumerate(citizens, start=1):
-        verified_types = {d.doc_type.value for d in c.documents if d.verified}
+        verified_types = {d.doc_type for d in c.documents if d.verified}
         eligible = [
             s for s in schemes
             if {t.strip() for t in (s.required_documents or "").split(",") if t.strip()}.issubset(verified_types)
@@ -194,7 +194,7 @@ def ai_suggestions(
         raise HTTPException(status_code=404, detail="Scheme or citizen not found")
 
     context = {
-        "documents": [d.doc_type.value for d in citizen.documents if d.verified],
+        "documents": [d.doc_type for d in citizen.documents if d.verified],
         "problem_count": len(citizen.votes),
     }
     suggestion = ai.suggest_alternatives(context, scheme.name)

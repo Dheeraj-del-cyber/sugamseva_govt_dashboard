@@ -20,7 +20,7 @@ import { api } from "../api/client";
 
 interface DocType {
   name: string;
-  description: string;
+  category: string;
 }
 
 interface UploadedDoc {
@@ -403,7 +403,7 @@ export default function AddUser() {
                           <FileText size={18} className="text-ink-400" />
                           <div>
                             <p className="text-xs font-bold text-ink-900">{doc.name}</p>
-                            <p className="text-[10px] text-ink-500">{doc.description}</p>
+                            <p className="text-[10px] text-ink-500">{doc.category}</p>
                           </div>
                         </div>
                         <div className="mt-2 pt-2 border-t border-ink-100 flex items-center justify-between">

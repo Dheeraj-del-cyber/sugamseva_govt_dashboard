@@ -1,9 +1,8 @@
-import enum
 import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+    Boolean, Column, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -33,17 +32,6 @@ class Official(Base):
 
     problems_added = relationship("Problem", back_populates="added_by")
     fingerprints = relationship("OfficialFingerprint", back_populates="official", cascade="all, delete-orphan")
-
-
-class DocumentType(str, enum.Enum):
-    AADHAAR = "Aadhaar Card"
-    PAN = "PAN Card"
-    PASSPORT = "Passport"
-    VOTER_ID = "Voter ID"
-    DRIVING_LICENCE = "Driving Licence"
-    RATION_CARD = "Ration Card"
-    INCOME_CERT = "Income Certificate"
-    LAND_RECORDS = "Land Records"
 
 
 class Citizen(Base):
@@ -110,19 +98,22 @@ class OfficialFingerprint(Base):
 
 
 class CitizenDocument(Base):
-    """Document card linked to a citizen. Real files are saved to server storage,
-    scanned metadata and OCR results are persisted. Viewing the file scan requires
+    """Document card linked to a citizen. The document's doc_type is a free-text
+    value validated against app.document_catalog.VALID_DOCUMENT_TYPES (the master
+    list of every Indian government document/card type). The actual file bytes
+    are stored directly in the database (file_data), not on server disk, so the
+    document vault lives entirely inside the database. Viewing the file requires
     a fresh fingerprint verification from the citizen or authorized official."""
     __tablename__ = "citizen_documents"
     __table_args__ = (UniqueConstraint("citizen_id", "doc_type", name="uq_citizen_doctype"),)
 
     id = Column(String, primary_key=True, default=gen_id)
     citizen_id = Column(String, ForeignKey("citizens.id"), nullable=False)
-    doc_type = Column(Enum(DocumentType), nullable=False)
+    doc_type = Column(String, nullable=False)        # Value from DOCUMENT_TYPE_CATALOG, e.g. "Aadhaar Card"
     doc_number = Column(String, nullable=True)      # e.g., "4582 9102 3847" or "ABCDE1234F"
     verified = Column(Boolean, default=False)
     source = Column(String, default="upload")        # "upload", "scan"
-    file_path = Column(String, nullable=True)       # Relative path under uploads/documents/
+    file_data = Column(LargeBinary, nullable=True)  # Raw file bytes, stored in the database
     file_name = Column(String, nullable=True)       # Original filename e.g. "aadhaar_card.pdf"
     file_size = Column(Integer, nullable=True)      # In bytes
     mime_type = Column(String, nullable=True)       # e.g. "application/pdf", "image/png"
@@ -176,7 +167,7 @@ class Scheme(Base):
     summary = Column(Text, nullable=True)
     pros = Column(Text, nullable=True)  # newline separated
     cons = Column(Text, nullable=True)
-    required_documents = Column(String, nullable=True)  # comma separated DocumentType values
+    required_documents = Column(String, nullable=True)  # comma separated document type names (see app.document_catalog)
     portal_source = Column(String, default="MyScheme / UMANG / National Portal")
     benefit_amount = Column(String, nullable=True)
     active = Column(Boolean, default=True)

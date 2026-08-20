@@ -1,50 +1,31 @@
-import os
-import shutil
 import uuid
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import get_db
+from app.document_catalog import DOCUMENT_TYPE_CATALOG, VALID_DOCUMENT_TYPES
 from app.security import get_current_official
 from app.services import biometric, notify, ocr
 
 router = APIRouter(prefix="/users", tags=["Citizens / Users"])
 documents_router = APIRouter(prefix="/documents", tags=["Documents"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "documents")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# The canonical set of document/"card" types that appear across every
-# government scheme's required_documents list. This is the single source of
-# truth the frontend's searchable upload picker is built from, so it always
-# matches exactly what the backend (and every Scheme.required_documents
-# value) actually recognises.
-DOCUMENT_TYPE_CATALOG = [
-    {"name": "Aadhaar Card", "description": "12-digit Unique Identification Authority of India (UIDAI) national identity number"},
-    {"name": "PAN Card", "description": "Permanent Account Number issued by the Income Tax Department"},
-    {"name": "Passport", "description": "Ministry of External Affairs travel and identity document"},
-    {"name": "Voter ID", "description": "Election Commission of India Electors Photo Identity Card (EPIC)"},
-    {"name": "Driving Licence", "description": "State Transport Authority driving licence"},
-    {"name": "Ration Card", "description": "Food & Civil Supplies Department household ration card"},
-    {"name": "Income Certificate", "description": "Revenue Department certified proof of annual income"},
-    {"name": "Land Records", "description": "Khatauni / Record of Rights (RoR) / 7-12 extract land ownership proof"},
-]
-
 
 @documents_router.get("/types")
 def list_document_types(current: models.Official = Depends(get_current_official)):
-    """All document/card types recognised across every government scheme -
-    what the Add User document vault lets an official search and upload."""
+    """The full master catalog of every document/card type recognised across
+    government schemes - what the searchable Upload Document picker filters
+    as the official types a letter."""
     return DOCUMENT_TYPE_CATALOG
 
 
 def _documents_summary(citizen: models.Citizen) -> str:
-    verified = [d.doc_type.value for d in citizen.documents if d.verified]
+    verified = [d.doc_type for d in citizen.documents if d.verified]
     return ", ".join(verified) if verified else "None"
 
 
@@ -55,7 +36,7 @@ def _schemes_near_count(db: Session, citizen: models.Citizen) -> int:
     count = 0
     for scheme in db.query(models.Scheme).filter(models.Scheme.active == True).all():  # noqa: E712
         required = {t.strip() for t in (scheme.required_documents or "").split(",") if t.strip()}
-        if required and required.issubset({t.value for t in verified_types}):
+        if required and required.issubset(verified_types):
             count += 1
     return count
 
@@ -69,14 +50,14 @@ def _to_profile(db: Session, citizen: models.Citizen) -> schemas.CitizenProfileO
         docs_out.append(
             schemas.DocumentOut(
                 id=d.id,
-                doc_type=d.doc_type.value,
+                doc_type=d.doc_type,
                 doc_number=d.doc_number,
                 verified=d.verified,
                 source=d.source or "upload",
                 file_name=d.file_name,
                 file_size=d.file_size,
                 mime_type=d.mime_type,
-                file_url=f"/users/{citizen.id}/documents/{d.id}/file" if d.file_path else None,
+                file_url=f"/users/{citizen.id}/documents/{d.id}/file" if d.file_data else None,
                 extracted_text=d.extracted_text,
                 created_at=d.created_at,
                 verified_at=d.verified_at,
@@ -283,41 +264,38 @@ async def upload_document(
     if not citizen:
         raise HTTPException(status_code=404, detail="User not found")
 
-    try:
-        doc_type_enum = models.DocumentType(doc_type)
-    except ValueError:
+    if doc_type not in VALID_DOCUMENT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid document type")
 
-    # Generate secure filename and persist to uploads directory
-    file_ext = os.path.splitext(file.filename)[1].lower() or ".pdf"
+    # Read the uploaded file straight into memory and store its bytes in the
+    # database (CitizenDocument.file_data) - nothing is written to server
+    # disk / the codebase's uploads folder.
+    file_bytes = await file.read()
+    file_size = len(file_bytes)
+    file_ext = (file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "pdf")
     doc_uuid = uuid.uuid4().hex
-    safe_filename = f"{doc_uuid}_{doc_type.replace(' ', '_').lower()}{file_ext}"
-    dest_path = os.path.join(UPLOAD_DIR, safe_filename)
 
-    with open(dest_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    file_size = os.path.getsize(dest_path)
-
-    # Perform real OCR & ID verification on uploaded file
-    ocr_result = ocr.verify_extracted_document(doc_type, dest_path, doc_number)
+    # Perform real OCR & ID verification on the uploaded file bytes
+    ocr_result = ocr.verify_extracted_document(
+        doc_type, file_bytes, doc_number, filename=file.filename, mime_type=file.content_type
+    )
 
     existing = (
         db.query(models.CitizenDocument)
-        .filter(models.CitizenDocument.citizen_id == user_id, models.CitizenDocument.doc_type == doc_type_enum)
+        .filter(models.CitizenDocument.citizen_id == user_id, models.CitizenDocument.doc_type == doc_type)
         .first()
     )
 
     if existing:
         doc = existing
     else:
-        doc = models.CitizenDocument(citizen_id=user_id, doc_type=doc_type_enum)
+        doc = models.CitizenDocument(citizen_id=user_id, doc_type=doc_type)
         db.add(doc)
 
-    doc.file_path = f"uploads/documents/{safe_filename}"
+    doc.file_data = file_bytes
     doc.file_name = file.filename
     doc.file_size = file_size
-    doc.mime_type = file.content_type or ("application/pdf" if file_ext == ".pdf" else "image/jpeg")
+    doc.mime_type = file.content_type or ("application/pdf" if file_ext == "pdf" else "image/jpeg")
     doc.doc_number = ocr_result.get("doc_number") or doc_number
     doc.extracted_text = ocr_result.get("extracted_text")
     doc.verified = ocr_result.get("verified", True)
@@ -330,7 +308,7 @@ async def upload_document(
 
     return schemas.DocumentOut(
         id=doc.id,
-        doc_type=doc.doc_type.value,
+        doc_type=doc.doc_type,
         doc_number=doc.doc_number,
         verified=doc.verified,
         source=doc.source,
@@ -351,29 +329,25 @@ def get_document_file(
     access_token: str = Query(..., description="File access token minted by /reveal after a fresh fingerprint scan"),
     db: Session = Depends(get_db),
 ):
-    """Streams the real stored document file. Per Government of India security
-    policy, this always requires a valid access_token minted by /reveal after
-    a fresh biometric fingerprint verification - there is no way to fetch a
-    document's bytes without one, even with a valid staff login."""
+    """Streams the real stored document file straight out of the database.
+    Per Government of India security policy, this always requires a valid
+    access_token minted by /reveal after a fresh biometric fingerprint
+    verification - there is no way to fetch a document's bytes without one,
+    even with a valid staff login."""
     if not biometric.check_file_access_token(access_token, doc_id):
         raise HTTPException(status_code=401, detail="Fingerprint verification required to access this document")
 
     doc = db.query(models.CitizenDocument).filter(
         models.CitizenDocument.id == doc_id, models.CitizenDocument.citizen_id == user_id
     ).first()
-    if not doc or not doc.file_path:
+    if not doc or not doc.file_data:
         raise HTTPException(status_code=404, detail="Document file not found")
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    full_path = os.path.join(base_dir, doc.file_path)
-
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail="File missing on server storage")
-
-    return FileResponse(
-        path=full_path,
+    filename = doc.file_name or f"{doc.doc_type}.pdf"
+    return Response(
+        content=doc.file_data,
         media_type=doc.mime_type or "application/octet-stream",
-        filename=doc.file_name or os.path.basename(full_path),
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
 
 
@@ -388,27 +362,25 @@ def scan_document(
     if not citizen:
         raise HTTPException(status_code=404, detail="User not found")
 
-    try:
-        doc_type_enum = models.DocumentType(payload.doc_type)
-    except ValueError:
+    if payload.doc_type not in VALID_DOCUMENT_TYPES:
         raise HTTPException(status_code=400, detail="Unknown document type")
 
     result = {"verified": True}
 
     existing = (
         db.query(models.CitizenDocument)
-        .filter(models.CitizenDocument.citizen_id == user_id, models.CitizenDocument.doc_type == doc_type_enum)
+        .filter(models.CitizenDocument.citizen_id == user_id, models.CitizenDocument.doc_type == payload.doc_type)
         .first()
     )
     if existing:
         doc = existing
     else:
-        doc = models.CitizenDocument(citizen_id=user_id, doc_type=doc_type_enum)
+        doc = models.CitizenDocument(citizen_id=user_id, doc_type=payload.doc_type)
         db.add(doc)
 
     doc.verified = result["verified"]
     doc.source = payload.source
-    doc.doc_number = payload.doc_number or f"{doc_type_enum.value.split()[0].upper()}-{uuid.uuid4().hex[:8].upper()}"
+    doc.doc_number = payload.doc_number or f"{payload.doc_type.split()[0].upper()}-{uuid.uuid4().hex[:8].upper()}"
     doc.encrypted_scan_ref = f"vault://{user_id}/{payload.doc_type}"
     doc.verified_at = datetime.utcnow() if result["verified"] else None
     db.commit()
@@ -416,14 +388,14 @@ def scan_document(
 
     return schemas.DocumentOut(
         id=doc.id,
-        doc_type=doc.doc_type.value,
+        doc_type=doc.doc_type,
         doc_number=doc.doc_number,
         verified=doc.verified,
         source=doc.source,
-        file_name=doc.file_name or f"{doc.doc_type.value}.pdf",
+        file_name=doc.file_name or f"{doc.doc_type}.pdf",
         file_size=doc.file_size or 245120,
         mime_type=doc.mime_type or "application/pdf",
-        file_url=f"/users/{user_id}/documents/{doc.id}/file" if doc.file_path else None,
+        file_url=f"/users/{user_id}/documents/{doc.id}/file" if doc.file_data else None,
         extracted_text=doc.extracted_text,
         created_at=doc.created_at,
         verified_at=doc.verified_at,
@@ -448,7 +420,7 @@ def reveal_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if doc.file_path:
+    if doc.file_data:
         file_access_token = biometric.issue_file_access_token(doc.id)
         file_url = f"/users/{user_id}/documents/{doc.id}/file?access_token={file_access_token}"
     else:
@@ -456,8 +428,8 @@ def reveal_document(
 
     return schemas.DocumentRevealResponse(
         doc_id=doc.id,
-        doc_type=doc.doc_type.value,
-        file_name=doc.file_name or f"{doc.doc_type.value}.pdf",
+        doc_type=doc.doc_type,
+        file_name=doc.file_name or f"{doc.doc_type}.pdf",
         file_size=doc.file_size or 256000,
         mime_type=doc.mime_type or "application/pdf",
         file_url=file_url,
@@ -488,15 +460,8 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if doc.file_path:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        full_path = os.path.join(base_dir, doc.file_path)
-        if os.path.exists(full_path):
-            try:
-                os.remove(full_path)
-            except OSError:
-                pass
-
+    # File bytes live only in this row (file_data column) - deleting the row
+    # removes the document entirely, nothing to clean up on disk.
     db.delete(doc)
     db.commit()
 

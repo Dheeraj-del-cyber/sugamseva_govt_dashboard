@@ -13,6 +13,7 @@ import {
   UploadCloud,
   ShieldCheck,
   Award,
+  Search,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, StatusPill, PrimaryButton, SecondaryButton } from "../components/UI";
@@ -75,11 +76,31 @@ export default function UserProfile() {
 
   // Additional Document Upload Modal
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [docCatalog, setDocCatalog] = useState<{ name: string; category: string }[]>([]);
   const [uploadDocType, setUploadDocType] = useState("Aadhaar Card");
+  const [docTypeSearch, setDocTypeSearch] = useState("Aadhaar Card");
+  const [showDocTypeOptions, setShowDocTypeOptions] = useState(false);
   const [uploadDocNumber, setUploadDocNumber] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  useEffect(() => {
+    api
+      .get("/documents/types")
+      .then(({ data }) => setDocCatalog(data))
+      .catch(() => setDocCatalog([]));
+  }, []);
+
+  // Only offer document types not already in this citizen's vault, filtered
+  // as the official types a letter (e.g. typing "a" surfaces Aadhaar Card,
+  // Anganwadi Registration, APAAR ID, etc.)
+  const uploadedTypeNames = new Set(profile?.documents.map((d) => d.doc_type) || []);
+  const docTypeOptions = docCatalog.filter(
+    (d) =>
+      !uploadedTypeNames.has(d.name) &&
+      (docTypeSearch.trim() === "" || d.name.toLowerCase().includes(docTypeSearch.trim().toLowerCase()))
+  );
 
   const loadProfile = () => {
     if (userId) api.get(`/users/${userId}`).then(({ data }) => setProfile(data));
@@ -139,6 +160,8 @@ export default function UserProfile() {
       setShowUploadModal(false);
       setUploadFile(null);
       setUploadDocNumber("");
+      setDocTypeSearch("Aadhaar Card");
+      setUploadDocType("Aadhaar Card");
       loadProfile();
     } catch (err: any) {
       setUploadError(err?.response?.data?.detail || "Upload failed");
@@ -473,23 +496,55 @@ export default function UserProfile() {
             </p>
 
             <form onSubmit={handleUploadAdditionalDoc} className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="text-xs font-semibold text-ink-700 block mb-1">Document Type</label>
-                <select
-                  value={uploadDocType}
-                  onChange={(e) => setUploadDocType(e.target.value)}
-                  className="w-full text-xs font-medium rounded-lg border px-3 py-2.5 outline-none"
-                  style={{ borderColor: "var(--color-ink-300)" }}
-                >
-                  <option value="Aadhaar Card">Aadhaar Card</option>
-                  <option value="PAN Card">PAN Card</option>
-                  <option value="Ration Card">Ration Card</option>
-                  <option value="Voter ID">Voter ID</option>
-                  <option value="Income Certificate">Income Certificate</option>
-                  <option value="Land Records">Land Records</option>
-                  <option value="Driving Licence">Driving Licence</option>
-                  <option value="Passport">Passport</option>
-                </select>
+                <div className="relative">
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+                  />
+                  <input
+                    type="text"
+                    value={docTypeSearch}
+                    onChange={(e) => {
+                      setDocTypeSearch(e.target.value);
+                      setShowDocTypeOptions(true);
+                    }}
+                    onFocus={() => setShowDocTypeOptions(true)}
+                    onBlur={() => setTimeout(() => setShowDocTypeOptions(false), 150)}
+                    placeholder="Type to search (e.g. Aadhaar, Ration, Income)..."
+                    className="w-full text-xs font-medium rounded-lg border pl-8 pr-3 py-2.5 outline-none"
+                    style={{ borderColor: "var(--color-ink-300)" }}
+                  />
+                </div>
+                {showDocTypeOptions && (
+                  <div
+                    className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border bg-white shadow-lg"
+                    style={{ borderColor: "var(--color-ink-300)" }}
+                  >
+                    {docTypeOptions.length === 0 ? (
+                      <p className="text-xs text-ink-400 italic px-3 py-2.5">
+                        No matching document type found.
+                      </p>
+                    ) : (
+                      docTypeOptions.map((d) => (
+                        <button
+                          key={d.name}
+                          type="button"
+                          onMouseDown={() => {
+                            setUploadDocType(d.name);
+                            setDocTypeSearch(d.name);
+                            setShowDocTypeOptions(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs hover:bg-ink-100 flex flex-col"
+                        >
+                          <span className="font-semibold text-ink-900">{d.name}</span>
+                          <span className="text-[10px] text-ink-500">{d.category}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
