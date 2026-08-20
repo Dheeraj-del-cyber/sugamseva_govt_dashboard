@@ -19,7 +19,6 @@ sugam-seva/
 │   │   ├── security.py    JWT auth + password hashing
 │   │   ├── config.py      Settings / env vars
 │   │   └── main.py        FastAPI app entrypoint
-│   ├── seed.py             Demo data seeder
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── Dockerfile
@@ -53,12 +52,11 @@ cd backend
 python -m venv venv && source venv/bin/activate   # optional but recommended
 pip install -r requirements.txt
 cp .env.example .env       # defaults already run in DEMO_MODE
-python seed.py              # creates sugamseva.db (SQLite) with demo data
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000   # creates an empty sugamseva.db on first run
 ```
 
 API docs: http://localhost:8000/docs
-Demo login: **Government ID** `GOV-IN-100234`, **Password** `Password@123`
+No officials exist until you register one — use the Sign Up screen (or `POST /auth/register`) to create the first official account.
 
 ### 2. Frontend
 
@@ -69,7 +67,7 @@ cp .env.example .env        # points VITE_API_BASE_URL at localhost:8000
 npm run dev
 ```
 
-Open http://localhost:5173 and sign in with the demo credentials above.
+Open http://localhost:5173 and sign up to create your first official account.
 
 ## Quick start (Docker Compose)
 
@@ -81,9 +79,6 @@ docker compose up --build
 - Frontend: http://localhost:5173
 - Backend: http://localhost:8000/docs
 - PostgreSQL: localhost:5432 (user/pass/db: `sugamseva`)
-
-Run `docker compose exec backend python seed.py` once, to seed demo data
-into Postgres.
 
 ## Tech stack (matches your brief)
 
