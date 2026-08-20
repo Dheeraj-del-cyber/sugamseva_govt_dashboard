@@ -6,10 +6,8 @@ import {
   FileText,
   Lock,
   Loader2,
-  Sparkles,
   Search,
   Fingerprint,
-  Info,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, PrimaryButton, SecondaryButton, TextField } from "../components/UI";
@@ -57,10 +55,6 @@ export default function AddUser() {
   // Only documents actually uploaded show up here
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
-
-  // DigiLocker connect state
-  const [digilockerNotice, setDigilockerNotice] = useState<string | null>(null);
-  const [connectingDigilocker, setConnectingDigilocker] = useState(false);
 
   // Fingerprint-gated document viewing
   const [pendingViewDocId, setPendingViewDocId] = useState<string | null>(null);
@@ -145,46 +139,6 @@ export default function AddUser() {
       setUploadedDocs((prev) => [...prev.filter((d) => d.doc_type !== docType), data]);
     } catch (err: any) {
       setError(err?.response?.data?.detail || `Failed to upload ${docType}`);
-    } finally {
-      setUploadingDoc(null);
-    }
-  };
-
-  const handleConnectDigiLocker = async () => {
-    if (!createdUserId) {
-      setError("Save the citizen's personal details first, then connect DigiLocker.");
-      return;
-    }
-    setDigilockerNotice(null);
-    setConnectingDigilocker(true);
-    try {
-      const { data } = await api.get(`/digilocker/${createdUserId}/authorize`);
-      if (data.real_credentials_configured && data.authorize_url) {
-        // Real DigiLocker OAuth2 consent screen - leaves the app.
-        window.location.href = data.authorize_url;
-      } else {
-        setDigilockerNotice(data.message);
-      }
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "Could not start DigiLocker connection.");
-    } finally {
-      setConnectingDigilocker(false);
-    }
-  };
-
-  const handleSimulatedDigiLockerImport = async () => {
-    if (!createdUserId) return;
-    setUploadingDoc("digilocker");
-    try {
-      const { data } = await api.post(`/users/${createdUserId}/documents/import-digilocker`);
-      setUploadedDocs((prev) => {
-        const byType = new Map(prev.map((d) => [d.doc_type, d]));
-        data.forEach((d: UploadedDoc) => byType.set(d.doc_type, d));
-        return Array.from(byType.values());
-      });
-      setDigilockerNotice(null);
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "DigiLocker sync failed");
     } finally {
       setUploadingDoc(null);
     }
@@ -349,33 +303,7 @@ export default function AddUser() {
                   Search any card issued under a government scheme, then upload it
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleConnectDigiLocker}
-                disabled={!createdUserId || connectingDigilocker}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gov-blue-600 text-gov-blue-600 hover:bg-gov-blue-50 disabled:opacity-40 transition-colors"
-              >
-                <Sparkles size={13} />
-                {connectingDigilocker ? "Connecting..." : "Connect DigiLocker"}
-              </button>
             </div>
-
-            {digilockerNotice && (
-              <div className="mb-4 flex items-start gap-2.5 text-xs text-amber-800 rounded-xl p-3.5 bg-amber-50 border border-amber-200">
-                <Info size={15} className="mt-0.5 shrink-0 text-amber-600" />
-                <div className="space-y-2">
-                  <p>{digilockerNotice}</p>
-                  <button
-                    type="button"
-                    onClick={handleSimulatedDigiLockerImport}
-                    disabled={uploadingDoc === "digilocker"}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40 transition-colors"
-                  >
-                    {uploadingDoc === "digilocker" ? "Importing..." : "Use Simulated Import (Demo Mode)"}
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Search + upload picker */}
             <div className="relative mb-4">

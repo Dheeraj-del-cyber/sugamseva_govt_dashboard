@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Fingerprint, Eye, EyeOff, ShieldCheck, Globe, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Fingerprint, Eye, EyeOff, ShieldCheck, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { captureFromSensor } from "../lib/biometricSensor";
@@ -85,7 +85,7 @@ export default function SignIn() {
             Sugam Seva
           </h1>
           <p className="mt-3 text-white/70 max-w-sm">
-            Digital Citizen Assistant for multilingual access to national government services, schemes and civic grievance redressal.
+            Digital Citizen Assistant for access to national government services, schemes and civic grievance redressal.
           </p>
 
           <div className="tricolor-rule w-24 rounded-full mt-8" />
@@ -100,12 +100,6 @@ export default function SignIn() {
       {/* Sign in card */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          <div className="flex items-center justify-end mb-6">
-            <button className="flex items-center gap-1.5 text-xs font-medium text-ink-500 hover:text-ink-900">
-              <Globe size={14} /> English
-            </button>
-          </div>
-
           <h2 className="font-display text-2xl font-bold text-ink-900">Government Portal Sign In</h2>
           <p className="text-sm text-ink-500 mt-1">Official Dashboard for Service Delivery &amp; Civic Governance</p>
 

@@ -2,7 +2,7 @@
 Sugam Seva - Configuration
 All secrets/API keys are read from environment variables. Sensible local
 defaults are provided so the project runs out of the box in DEMO_MODE,
-where DigiLocker / Bhashini / real biometric hardware / SMS gateways are
+where real biometric hardware / SMS gateways are
 replaced by mock services (see app/services/*). Swap DEMO_MODE=false and
 fill in the real credentials once your organisation has been onboarded to
 those government APIs.
@@ -25,24 +25,14 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 60 * 12
 
     # --- Demo / mock toggle -------------------------------------------
-    # When True, DigiLocker, Bhashini, Biometric device, SMS gateway and
+    # When True, Biometric device, SMS gateway and
     # AI calls are simulated so the whole app runs without any government
     # or third-party credentials. Flip to False once real API keys below
     # are supplied.
     DEMO_MODE: bool = True
 
     # --- Government + third-party integrations (fill in for prod) -----
-    DIGILOCKER_CLIENT_ID: str = ""
-    DIGILOCKER_CLIENT_SECRET: str = ""
-    DIGILOCKER_BASE_URL: str = "https://api.digitallocker.gov.in"
-    DIGILOCKER_REDIRECT_URI: str = "http://localhost:8000/digilocker/callback"
-    # Where to send the official's browser back to after the DigiLocker
-    # consent flow completes (the dashboard's Add User page).
     FRONTEND_BASE_URL: str = "http://localhost:5173"
-
-    BHASHINI_API_KEY: str = ""
-    BHASHINI_USER_ID: str = ""
-    BHASHINI_BASE_URL: str = "https://bhashini.gov.in/api"
 
     BIOMETRIC_DEVICE_API_URL: str = ""  # e.g. local RD-service URL for Aadhaar biometric device
 

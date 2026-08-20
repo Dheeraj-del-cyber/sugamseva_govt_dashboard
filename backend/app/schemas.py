@@ -147,7 +147,7 @@ class CitizenProfileOut(BaseModel):
 
 class DocumentScanRequest(BaseModel):
     doc_type: str
-    source: str = "scan"  # "scan", "upload" or "digilocker"
+    source: str = "scan"  # "scan" or "upload"
     doc_number: Optional[str] = None
 
 

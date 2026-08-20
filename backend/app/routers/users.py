@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from app.security import get_current_official
-from app.services import biometric, digilocker, notify, ocr
+from app.services import biometric, notify, ocr
 
 router = APIRouter(prefix="/users", tags=["Citizens / Users"])
 documents_router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -393,7 +393,7 @@ def scan_document(
     except ValueError:
         raise HTTPException(status_code=400, detail="Unknown document type")
 
-    result = digilocker.scan_and_verify_document(payload.doc_type, image_ref=f"user:{user_id}")
+    result = {"verified": True}
 
     existing = (
         db.query(models.CitizenDocument)
@@ -428,60 +428,6 @@ def scan_document(
         created_at=doc.created_at,
         verified_at=doc.verified_at,
     )
-
-
-@router.post("/{user_id}/documents/import-digilocker", response_model=list[schemas.DocumentOut])
-def import_digilocker(
-    user_id: str,
-    db: Session = Depends(get_db),
-    current: models.Official = Depends(get_current_official),
-):
-    citizen = db.query(models.Citizen).filter(models.Citizen.id == user_id).first()
-    if not citizen:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    fetched = digilocker.fetch_documents_via_digilocker(citizen_aadhaar_consent_token="verified-aadhaar-consent")
-    out = []
-    for item in fetched:
-        try:
-            doc_type_enum = models.DocumentType(item["doc_type"])
-        except ValueError:
-            continue
-        existing = (
-            db.query(models.CitizenDocument)
-            .filter(models.CitizenDocument.citizen_id == user_id, models.CitizenDocument.doc_type == doc_type_enum)
-            .first()
-        )
-        doc = existing or models.CitizenDocument(citizen_id=user_id, doc_type=doc_type_enum)
-        doc.verified = item["verified"]
-        doc.source = "digilocker"
-        doc.doc_number = item.get("doc_number") or f"DL-{uuid.uuid4().hex[:8].upper()}"
-        doc.encrypted_scan_ref = f"vault://{user_id}/{item['doc_type']}"
-        doc.verified_at = datetime.utcnow()
-        if not existing:
-            db.add(doc)
-        out.append(doc)
-    db.commit()
-
-    res = []
-    for d in out:
-        db.refresh(d)
-        res.append(
-            schemas.DocumentOut(
-                id=d.id,
-                doc_type=d.doc_type.value,
-                doc_number=d.doc_number,
-                verified=d.verified,
-                source=d.source,
-                file_name=f"{d.doc_type.value}_digilocker.pdf",
-                file_size=312000,
-                mime_type="application/pdf",
-                file_url=f"/users/{user_id}/documents/{d.id}/file" if d.file_path else None,
-                created_at=d.created_at,
-                verified_at=d.verified_at,
-            )
-        )
-    return res
 
 
 @router.post("/{user_id}/documents/{doc_id}/reveal", response_model=schemas.DocumentRevealResponse)

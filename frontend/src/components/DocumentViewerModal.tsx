@@ -107,7 +107,7 @@ export default function DocumentViewerModal({ isOpen, onClose, document }: Props
         <div className="p-3 px-6 bg-white border-t border-ink-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-ink-500 gap-2">
           <div className="flex items-center gap-2">
             <ShieldCheck size={14} className="text-green-600 shrink-0" />
-            <span>Digital Document Vault — STQC &amp; DigiLocker Compliant Server Storage</span>
+            <span>Digital Document Vault — STQC Compliant Server Storage</span>
           </div>
           {document.extracted_text && (
             <div className="text-[11px] font-mono text-ink-600 bg-ink-100 px-2.5 py-1 rounded-md truncate max-w-sm">

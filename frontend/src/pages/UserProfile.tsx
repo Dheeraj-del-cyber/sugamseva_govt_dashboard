@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   Fingerprint,
   Lock,
@@ -63,13 +63,11 @@ interface Profile {
 
 export default function UserProfile() {
   const { userId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [matchedFingerName, setMatchedFingerName] = useState<string | null>(null);
   const [revealedDocs, setRevealedDocs] = useState<Record<string, DocumentOut>>({});
   const [unlocking, setUnlocking] = useState(false);
-  const [digilockerBanner, setDigilockerBanner] = useState(false);
 
   // Modals
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -90,16 +88,6 @@ export default function UserProfile() {
   useEffect(() => {
     loadProfile();
   }, [userId]);
-
-  useEffect(() => {
-    if (searchParams.get("digilocker") === "success") {
-      setDigilockerBanner(true);
-      loadProfile();
-      searchParams.delete("digilocker");
-      setSearchParams(searchParams, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleBiometricSuccess = async (token: string, matchedFinger: string) => {
     if (!userId || !profile) return;
@@ -177,18 +165,6 @@ export default function UserProfile() {
   return (
     <Layout title="Citizen Profile" backTo={{ to: "/users", label: "Back to Users" }}>
       <div className="max-w-4xl mx-auto space-y-6">
-        {digilockerBanner && (
-          <div className="rounded-xl p-3.5 bg-green-100/70 border border-green-200 text-green-900 text-xs font-medium flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-green-600 shrink-0" />
-              <span>Documents imported from DigiLocker successfully.</span>
-            </div>
-            <button type="button" onClick={() => setDigilockerBanner(false)} className="font-bold underline text-green-950">
-              Dismiss
-            </button>
-          </div>
-        )}
-
         {/* Header Card */}
         <Card className="p-6 flex flex-col sm:flex-row items-center sm:items-start justify-between gap-5 text-center sm:text-left">
           <div className="flex flex-col sm:flex-row items-center gap-5">

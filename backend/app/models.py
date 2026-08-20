@@ -121,7 +121,7 @@ class CitizenDocument(Base):
     doc_type = Column(Enum(DocumentType), nullable=False)
     doc_number = Column(String, nullable=True)      # e.g., "4582 9102 3847" or "ABCDE1234F"
     verified = Column(Boolean, default=False)
-    source = Column(String, default="upload")        # "upload", "scan", "digilocker"
+    source = Column(String, default="upload")        # "upload", "scan"
     file_path = Column(String, nullable=True)       # Relative path under uploads/documents/
     file_name = Column(String, nullable=True)       # Original filename e.g. "aadhaar_card.pdf"
     file_size = Column(Integer, nullable=True)      # In bytes

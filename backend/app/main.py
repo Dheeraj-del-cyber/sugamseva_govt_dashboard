@@ -3,13 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import auth, officials, users, problems, schemes, dashboard, biometric_router, digilocker_router
+from app.routers import auth, officials, users, problems, schemes, dashboard, biometric_router
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Backend API for Sugam Seva - a multilingual digital citizen assistant "
+    description="Backend API for Sugam Seva - a digital citizen assistant "
                  "for Government of India services and schemes.",
     version="1.0.0",
 )
@@ -30,7 +30,6 @@ app.include_router(problems.router)
 app.include_router(schemes.router)
 app.include_router(dashboard.router)
 app.include_router(biometric_router.router)
-app.include_router(digilocker_router.router)
 
 
 @app.get("/")
