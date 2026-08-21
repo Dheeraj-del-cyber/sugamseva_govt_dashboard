@@ -280,10 +280,16 @@ class SchemeMasterListItem(BaseModel):
     applied_count: int
 
 
+class SchemePersonItem(BaseModel):
+    id: str
+    full_name: str
+    phone_number: Optional[str] = None
+    year: Optional[int] = None
+
+
 class SchemeProfileOut(BaseModel):
     """Full scheme profile - every field sourced from the master schemes
-    workbook (SugamSeva_Master_Schemes_Documents_ProblemCategories.xlsx),
-    plus live applied/used counts computed from citizen activity."""
+    workbook, plus live applied/used/missed/eligible counts computed from citizen activity."""
     id: str
     code: Optional[str] = None
     name: str
@@ -299,8 +305,13 @@ class SchemeProfileOut(BaseModel):
     candidate_documents: List[str] = []
     document_mapping_note: Optional[str] = None
     data_source: Optional[str] = None
-    applied_count: int
-    used_count: int
+    applied_count: int = 0
+    used_count: int = 0
+    missed_count: int = 0
+    eligible_count: int = 0
+    application_start_date: Optional[str] = None
+    application_end_date: Optional[str] = None
+    apply_url: Optional[str] = None
 
 
 class AISuggestionRequest(BaseModel):

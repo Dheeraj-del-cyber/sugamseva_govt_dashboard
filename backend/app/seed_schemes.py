@@ -44,6 +44,31 @@ def seed_scheme_master(db: Session) -> None:
         scheme.candidate_documents = candidate_documents_display
         scheme.document_mapping_note = row["document_mapping_note"]
         scheme.data_source = row["data_source"]
+        scheme.application_start_date = row.get("application_start_date") or "01 Apr 2025"
+        scheme.application_end_date = row.get("application_end_date") or "31 Mar 2026"
+        scheme.apply_url = row.get("apply_url") or "https://www.myscheme.gov.in/"
         scheme.active = True
 
     db.commit()
+
+    # Seed representative citizen scheme usages if none exist
+    citizens = db.query(models.Citizen).all()
+    if citizens:
+        all_schemes = db.query(models.Scheme).all()
+        existing_usages = db.query(models.SchemeUsage).count()
+        if existing_usages == 0 and len(all_schemes) >= 10:
+            import random
+            statuses = ["applied", "used", "missed"]
+            # Seed a spread of usages across top 30 schemes
+            for i, scheme in enumerate(all_schemes[:35]):
+                for c_idx, citizen in enumerate(citizens):
+                    # Deterministic distribution based on scheme and citizen index
+                    status = statuses[(i + c_idx) % len(statuses)]
+                    usage = models.SchemeUsage(
+                        scheme_id=scheme.id,
+                        citizen_id=citizen.id,
+                        year=2026,
+                        status=status
+                    )
+                    db.add(usage)
+            db.commit()

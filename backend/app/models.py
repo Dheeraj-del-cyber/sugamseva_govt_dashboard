@@ -186,6 +186,9 @@ class Scheme(Base):
     candidate_documents = Column(Text, nullable=True)  # "; " separated, exactly as in the workbook
     document_mapping_note = Column(Text, nullable=True)
     data_source = Column(String, nullable=True)
+    application_start_date = Column(String, nullable=True)
+    application_end_date = Column(String, nullable=True)
+    apply_url = Column(String, nullable=True)
 
     usages = relationship("SchemeUsage", back_populates="scheme")
 
