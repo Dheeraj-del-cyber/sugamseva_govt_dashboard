@@ -19,7 +19,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import Layout from "../components/Layout";
-import { Card, StatusPill, PrimaryButton, SecondaryButton } from "../components/UI";
+import { Card, StatusPill, SecondaryButton } from "../components/UI";
 import BiometricVerifyModal from "../components/BiometricVerifyModal";
 import DocumentViewerModal from "../components/DocumentViewerModal";
 import { api, API_BASE_URL } from "../api/client";

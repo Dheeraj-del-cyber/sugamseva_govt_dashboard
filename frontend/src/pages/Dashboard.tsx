@@ -9,7 +9,6 @@ import {
   Tags,
   Clock,
   Scale,
-  Award,
   Layers,
   Sparkles,
 } from "lucide-react";

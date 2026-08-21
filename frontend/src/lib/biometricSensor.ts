@@ -28,16 +28,6 @@ export interface SensorInfo {
   available: boolean;
 }
 
-// Convert string to base64url array buffer
-function bufferFromBase64(base64: string): ArrayBuffer {
-  const binary = atob(base64.replace(/-/g, "+").replace(/_/g, "/"));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
 function bufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
