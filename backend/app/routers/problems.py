@@ -20,7 +20,7 @@ def list_problems(
     query = db.query(models.Problem)
     if search:
         query = query.filter(models.Problem.title.ilike(f"%{search}%"))
-            if status == "solved":
+    if status == "solved":
         query = query.filter(models.Problem.is_solved == True)  # noqa: E712
     elif status == "in-progress":
         query = query.filter(models.Problem.is_solved == False)  # noqa: E712
@@ -173,7 +173,9 @@ def mark_solved(
     citizen = db.query(models.Citizen).filter(models.Citizen.id == payload.citizen_id).first()
     notify.send_sms(citizen.phone_number, f"Good news! Your reported issue '{problem.title}' has been marked as solved.")
     return {"status": "solved", "solved_votes": problem.solved_votes}
-    @router.post("/{problem_id}/notify")
+
+
+@router.post("/{problem_id}/notify")
 def notify_voters(
     problem_id: str,
     db: Session = Depends(get_db),
