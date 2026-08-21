@@ -1,13 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Plus, X } from "lucide-react";
+import { Search } from "lucide-react";
 import Layout from "../components/Layout";
-import {
-  Card,
-  PrimaryButton,
-  SecondaryButton,
-  TextField,
-} from "../components/UI";
+import { Card } from "../components/UI";
 import { api } from "../api/client";
 import { PROBLEM_CATEGORIES, OTHER_PROBLEM_CATEGORY } from "../lib/problemCategories";
 
@@ -25,11 +20,6 @@ export default function VoteOfProblems() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [category, setCategory] = useState("all");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newCategory, setNewCategory] = useState(OTHER_PROBLEM_CATEGORY);
-  const [saving, setSaving] = useState(false);
 
   const load = () => {
     const params: { search?: string; status?: string; category?: string } = {};
@@ -53,25 +43,6 @@ export default function VoteOfProblems() {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
   }, [search, status, category]);
-
-  const handleAddProblem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await api.post("/problems", {
-        title: newTitle,
-        description: newDescription,
-        category: newCategory || OTHER_PROBLEM_CATEGORY,
-      });
-      setShowAddModal(false);
-      setNewTitle("");
-      setNewDescription("");
-      setNewCategory(OTHER_PROBLEM_CATEGORY);
-      load();
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <Layout title="Vote of Problems">
@@ -123,10 +94,6 @@ export default function VoteOfProblems() {
               </option>
             ))}
           </select>
-
-          <PrimaryButton type="button" onClick={() => setShowAddModal(true)}>
-            <Plus size={15} /> Add Problem
-          </PrimaryButton>
         </div>
 
         <div className="overflow-x-auto">
@@ -199,80 +166,6 @@ export default function VoteOfProblems() {
           </table>
         </div>
       </Card>
-
-      {showAddModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 relative">
-            <button
-              onClick={() => setShowAddModal(false)}
-              className="absolute top-4 right-4 text-ink-500 hover:text-ink-900"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-            <h3 className="font-display font-bold text-lg text-ink-900 mb-4">
-              Add Problem
-            </h3>
-            <form onSubmit={handleAddProblem} className="space-y-4">
-              <TextField
-                label="Problem Title"
-                required
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-              />
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-700">
-                  Category
-                </span>
-                <select
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
-                  style={{ borderColor: "var(--color-ink-300)" }}
-                >
-                  {PROBLEM_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-700">
-                  Description
-                </span>
-                <textarea
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  rows={3}
-                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
-                  style={{ borderColor: "var(--color-ink-300)" }}
-                />
-              </label>
-              <p className="text-xs text-ink-500">
-                Once added, this problem cannot be deleted. Citizens can vote
-                for it going forward.
-              </p>
-              <div className="flex gap-3 pt-2">
-                <SecondaryButton
-                  type="button"
-                  className="flex-1"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  Cancel
-                </SecondaryButton>
-                <PrimaryButton
-                  type="submit"
-                  className="flex-1"
-                  disabled={saving}
-                >
-                  {saving ? "Adding..." : "Add Problem"}
-                </PrimaryButton>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 }

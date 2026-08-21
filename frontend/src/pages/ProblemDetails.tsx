@@ -5,6 +5,10 @@ import {
   ShieldAlert,
   CheckCircle2,
   UserCheck,
+  Plus,
+  X,
+  Search,
+  Phone,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, PrimaryButton } from "../components/UI";
@@ -31,6 +35,12 @@ interface AffectedUser {
   solved: boolean;
 }
 
+interface CitizenSearchResult {
+  id: string;
+  full_name: string;
+  phone_number: string;
+}
+
 export default function ProblemDetails() {
   const { problemId } = useParams();
   const [problem, setProblem] = useState<ProblemDetail | null>(null);
@@ -39,6 +49,14 @@ export default function ProblemDetails() {
   const [showBioModal, setShowBioModal] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // Add Citizen (by phone number) modal
+  const [showAddCitizenModal, setShowAddCitizenModal] = useState(false);
+  const [phoneSearch, setPhoneSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<CitizenSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [addCitizenError, setAddCitizenError] = useState("");
+  const [addingCitizenId, setAddingCitizenId] = useState<string | null>(null);
 
   const load = () => {
     if (!problemId) return;
@@ -53,6 +71,48 @@ export default function ProblemDetails() {
   };
 
   useEffect(load, [problemId]);
+
+  useEffect(() => {
+    if (!showAddCitizenModal) return;
+    if (!phoneSearch.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(() => {
+      api
+        .get("/users", { params: { search: phoneSearch.trim() } })
+        .then(({ data }) => setSearchResults(data))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [phoneSearch, showAddCitizenModal]);
+
+  const openAddCitizenModal = () => {
+    setPhoneSearch("");
+    setSearchResults([]);
+    setAddCitizenError("");
+    setShowAddCitizenModal(true);
+  };
+
+  const handleAddCitizenVote = async (citizenId: string) => {
+    if (!problemId) return;
+    setAddingCitizenId(citizenId);
+    setAddCitizenError("");
+    try {
+      await api.post(`/problems/${problemId}/vote`, { citizen_id: citizenId });
+      setShowAddCitizenModal(false);
+      setMessage("Citizen added to this problem's vote count.");
+      load();
+    } catch (err: any) {
+      setAddCitizenError(
+        err?.response?.data?.detail || "Could not add this citizen to the problem",
+      );
+    } finally {
+      setAddingCitizenId(null);
+    }
+  };
 
   const handleOpenBiometricModal = () => {
     if (!selectedUser) {
@@ -159,9 +219,14 @@ export default function ProblemDetails() {
                 sensor
               </p>
             </div>
-            <span className="text-xs font-semibold text-ink-500">
-              {users.length} Citizens Voted
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-ink-500">
+                {users.length} Citizens Voted
+              </span>
+              <PrimaryButton type="button" onClick={openAddCitizenModal}>
+                <Plus size={15} /> Add Citizen
+              </PrimaryButton>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -291,6 +356,99 @@ export default function ProblemDetails() {
           title="Citizen Biometric Sign-off"
           description={`Place either of ${selectedCitizen?.full_name || "the citizen"}'s registered fingers (Right Thumb or Left Thumb) on the hardware sensor to confirm problem resolution.`}
         />
+      )}
+
+      {/* Add Citizen (by phone number) Modal */}
+      {showAddCitizenModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-ink-100 p-6 relative">
+            <button
+              onClick={() => setShowAddCitizenModal(false)}
+              className="absolute top-4 right-4 text-ink-500 hover:text-ink-900"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+            <h3 className="font-display font-bold text-lg text-ink-900 mb-1">
+              Add Citizen
+            </h3>
+            <p className="text-xs text-ink-500 mb-4">
+              Search a citizen by phone number and add their vote to this
+              problem &mdash; increasing the total citizen count.
+            </p>
+
+            <div className="relative mb-3">
+              <Phone
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+              />
+              <input
+                type="text"
+                value={phoneSearch}
+                onChange={(e) => setPhoneSearch(e.target.value)}
+                placeholder="Search by phone number"
+                autoFocus
+                className="w-full text-sm rounded-lg border pl-9 pr-3 py-2.5 outline-none focus:border-gov-blue-500"
+                style={{ borderColor: "var(--color-ink-300)" }}
+              />
+            </div>
+
+            {addCitizenError && (
+              <p className="text-xs font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 mb-3">
+                {addCitizenError}
+              </p>
+            )}
+
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-ink-200 divide-y divide-ink-100">
+              {searching && (
+                <p className="text-xs text-ink-400 italic px-3 py-3 flex items-center gap-1.5">
+                  <Search size={12} /> Searching...
+                </p>
+              )}
+              {!searching && phoneSearch.trim() && searchResults.length === 0 && (
+                <p className="text-xs text-ink-400 italic px-3 py-3">
+                  No citizen found with that phone number.
+                </p>
+              )}
+              {!searching && !phoneSearch.trim() && (
+                <p className="text-xs text-ink-400 italic px-3 py-3">
+                  Start typing a phone number to find a citizen.
+                </p>
+              )}
+              {searchResults.map((c) => {
+                const alreadyVoted = users.some((u) => u.id === c.id);
+                return (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-ink-900 truncate">
+                        {c.full_name}
+                      </p>
+                      <p className="text-[11px] text-ink-500">
+                        {c.phone_number}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={alreadyVoted || addingCitizenId === c.id}
+                      onClick={() => handleAddCitizenVote(c.id)}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-md text-white disabled:opacity-40 transition-colors shrink-0"
+                      style={{ backgroundColor: "var(--color-gov-blue-600)" }}
+                    >
+                      {alreadyVoted
+                        ? "Already Added"
+                        : addingCitizenId === c.id
+                          ? "Adding..."
+                          : "Add"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
     </Layout>
   );
