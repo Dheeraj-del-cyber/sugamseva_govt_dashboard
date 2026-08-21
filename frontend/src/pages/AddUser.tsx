@@ -22,6 +22,7 @@ import DocumentViewerModal from "../components/DocumentViewerModal";
 import LocationAutocomplete from "../components/LocationAutocomplete";
 import type { EnrolledFinger } from "../lib/biometricSensor";
 import { api } from "../api/client";
+import { PROBLEM_CATEGORIES, OTHER_PROBLEM_CATEGORY } from "../lib/problemCategories";
 
 interface DocType {
   name: string;
@@ -95,7 +96,7 @@ export default function AddUser() {
   const [editingProblem, setEditingProblem] = useState<CitizenProblemItem | null>(null);
   const [problemTitle, setProblemTitle] = useState("");
   const [problemDescription, setProblemDescription] = useState("");
-  const [problemCategory, setProblemCategory] = useState("");
+  const [problemCategory, setProblemCategory] = useState(OTHER_PROBLEM_CATEGORY);
   const [savingProblem, setSavingProblem] = useState(false);
   const [problemError, setProblemError] = useState("");
 
@@ -125,7 +126,7 @@ export default function AddUser() {
     setEditingProblem(null);
     setProblemTitle("");
     setProblemDescription("");
-    setProblemCategory("");
+    setProblemCategory(OTHER_PROBLEM_CATEGORY);
     setProblemError("");
     setShowAddProblemModal(true);
   };
@@ -134,7 +135,7 @@ export default function AddUser() {
     setEditingProblem(p);
     setProblemTitle(p.title);
     setProblemDescription(p.description || "");
-    setProblemCategory(p.category || "");
+    setProblemCategory(p.category || OTHER_PROBLEM_CATEGORY);
     setProblemError("");
     setShowEditProblemModal(true);
   };
@@ -148,7 +149,7 @@ export default function AddUser() {
       await api.post(`/users/${createdUserId}/problems`, {
         title: problemTitle,
         description: problemDescription || undefined,
-        category: problemCategory || undefined,
+        category: problemCategory || OTHER_PROBLEM_CATEGORY,
       });
       setShowAddProblemModal(false);
       loadCitizenProblems();
@@ -168,7 +169,7 @@ export default function AddUser() {
       await api.patch(`/problems/${editingProblem.problem_id}`, {
         title: problemTitle,
         description: problemDescription,
-        category: problemCategory,
+        category: problemCategory || OTHER_PROBLEM_CATEGORY,
       });
       setShowEditProblemModal(false);
       setEditingProblem(null);
@@ -671,11 +672,9 @@ export default function AddUser() {
                             <span className="text-[11px] font-bold uppercase tracking-wider text-ink-400">
                               Problem {idx + 1}
                             </span>
-                            {p.category && (
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700">
-                                {p.category}
-                              </span>
-                            )}
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700">
+                              {p.category || OTHER_PROBLEM_CATEGORY}
+                            </span>
                             {p.solved ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                                 <CheckCircle2 size={10} /> Solved
@@ -805,12 +804,21 @@ export default function AddUser() {
                 onChange={(e) => setProblemTitle(e.target.value)}
                 placeholder="e.g. Broken streetlight on MG Road"
               />
-              <TextField
-                label="Category (Optional)"
-                value={problemCategory}
-                onChange={(e) => setProblemCategory(e.target.value)}
-                placeholder="e.g. Roads, Water Supply, Electricity"
-              />
+              <label className="block">
+                <span className="text-xs font-semibold text-ink-700">Category</span>
+                <select
+                  value={problemCategory}
+                  onChange={(e) => setProblemCategory(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
+                  style={{ borderColor: "var(--color-ink-300)" }}
+                >
+                  {PROBLEM_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="block">
                 <span className="text-xs font-semibold text-ink-700">Description</span>
                 <textarea
@@ -861,11 +869,21 @@ export default function AddUser() {
                 value={problemTitle}
                 onChange={(e) => setProblemTitle(e.target.value)}
               />
-              <TextField
-                label="Category (Optional)"
-                value={problemCategory}
-                onChange={(e) => setProblemCategory(e.target.value)}
-              />
+              <label className="block">
+                <span className="text-xs font-semibold text-ink-700">Category</span>
+                <select
+                  value={problemCategory}
+                  onChange={(e) => setProblemCategory(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
+                  style={{ borderColor: "var(--color-ink-300)" }}
+                >
+                  {PROBLEM_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="block">
                 <span className="text-xs font-semibold text-ink-700">Description</span>
                 <textarea

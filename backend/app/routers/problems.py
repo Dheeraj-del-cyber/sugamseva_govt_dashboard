@@ -13,6 +13,7 @@ router = APIRouter(prefix="/problems", tags=["Problems / Voting"])
 def list_problems(
     search: str | None = None,
     status: str | None = None,
+    category: str | None = None,
     top: int | None = None,
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
@@ -24,12 +25,22 @@ def list_problems(
         query = query.filter(models.Problem.is_solved == True)  # noqa: E712
     elif status == "in-progress":
         query = query.filter(models.Problem.is_solved == False)  # noqa: E712
+    if category and category != "all":
+        query = query.filter(models.Problem.category == category)
     query = query.order_by(models.Problem.total_votes.desc())
     if top:
         query = query.limit(top)
     problems = query.all()
     return [
-        schemas.ProblemListItem(sl_no=i, id=p.id, title=p.title, total_votes=p.total_votes, solved_votes=p.solved_votes)
+        schemas.ProblemListItem(
+            sl_no=i,
+            id=p.id,
+            title=p.title,
+            category=p.category,
+            total_votes=p.total_votes,
+            solved_votes=p.solved_votes,
+            is_solved=p.is_solved,
+        )
         for i, p in enumerate(problems, start=1)
     ]
 
@@ -43,7 +54,7 @@ def add_problem(
     problem = models.Problem(
         title=payload.title,
         description=payload.description,
-        category=payload.category,
+        category=payload.category or "Others",
         added_by_official_id=current.id,
     )
     db.add(problem)

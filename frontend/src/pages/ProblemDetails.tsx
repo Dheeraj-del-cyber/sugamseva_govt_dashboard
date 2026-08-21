@@ -126,7 +126,7 @@ export default function ProblemDetails() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700">
-                {problem.category || "Civic Infrastructure"}
+                {problem.category || "Others"}
               </span>
               <h2 className="font-display text-2xl font-bold text-ink-900 mt-2">
                 {problem.title}

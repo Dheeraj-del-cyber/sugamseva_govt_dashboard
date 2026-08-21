@@ -555,7 +555,7 @@ def add_citizen_problem(
     problem = models.Problem(
         title=payload.title,
         description=payload.description,
-        category=payload.category,
+        category=payload.category or "Others",
         added_by_official_id=current.id,
     )
     db.add(problem)

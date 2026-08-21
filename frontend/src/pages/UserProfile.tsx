@@ -23,6 +23,7 @@ import { Card, StatusPill, SecondaryButton } from "../components/UI";
 import BiometricVerifyModal from "../components/BiometricVerifyModal";
 import DocumentViewerModal from "../components/DocumentViewerModal";
 import { api, API_BASE_URL } from "../api/client";
+import { OTHER_PROBLEM_CATEGORY } from "../lib/problemCategories";
 
 interface DocumentOut {
   id: string;
@@ -49,6 +50,19 @@ interface FingerprintOut {
   captured_at: string;
 }
 
+interface CitizenProblemItem {
+  vote_id: string;
+  problem_id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  total_votes: number;
+  solved_votes: number;
+  is_solved: boolean;
+  solved: boolean;
+  reported_at: string;
+}
+
 interface Profile {
   id: string;
   full_name: string;
@@ -69,6 +83,7 @@ export default function UserProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [citizenProblems, setCitizenProblems] = useState<CitizenProblemItem[]>([]);
   const [unlocked, setUnlocked] = useState(false);
   const [matchedFingerName, setMatchedFingerName] = useState<string | null>(null);
   const [revealedDocs, setRevealedDocs] = useState<Record<string, DocumentOut>>({});
@@ -116,8 +131,13 @@ export default function UserProfile() {
     if (userId) api.get(`/users/${userId}`).then(({ data }) => setProfile(data));
   };
 
+  const loadCitizenProblems = () => {
+    if (userId) api.get(`/users/${userId}/problems`).then(({ data }) => setCitizenProblems(data));
+  };
+
   useEffect(() => {
     loadProfile();
+    loadCitizenProblems();
   }, [userId]);
 
   const handleDeleteCitizen = async () => {
@@ -303,6 +323,57 @@ export default function UserProfile() {
             </p>
           </Card>
         </div>
+
+        {/* Section: Problem List (each civic issue this citizen has reported) */}
+        <Card className="p-5">
+          <h3 className="font-display font-bold text-ink-900 mb-4 flex items-center gap-2">
+            <Award size={18} style={{ color: "var(--color-saffron-500)" }} /> Problem List
+          </h3>
+          {citizenProblems.length === 0 ? (
+            <p className="text-xs text-ink-400 italic py-2">
+              No problems reported for this citizen yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {citizenProblems.map((p, idx) => (
+                <div
+                  key={p.vote_id}
+                  className="p-4 rounded-xl border border-ink-200 bg-white hover:border-ink-300 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-ink-400">
+                          Problem {idx + 1}
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700">
+                          {p.category || OTHER_PROBLEM_CATEGORY}
+                        </span>
+                        {p.solved ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                            <CheckCircle2 size={10} /> Solved
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-ink-900 mt-1.5">{p.title}</p>
+                      {p.description && (
+                        <p className="text-xs text-ink-500 mt-1 line-clamp-2">{p.description}</p>
+                      )}
+                      <p className="text-[11px] text-ink-400 mt-2">
+                        {p.total_votes} total vote{p.total_votes === 1 ? "" : "s"} across all citizens &middot;{" "}
+                        {p.solved_votes} confirmed solved
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
         {/* Section: 2-Finger Biometric Registry */}
         <Card className="p-5">
