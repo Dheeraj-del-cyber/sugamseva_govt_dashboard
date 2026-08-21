@@ -270,6 +270,39 @@ class SchemeApplyRequest(BaseModel):
     citizen_ids: List[str]  # empty list = apply to all eligible
 
 
+# ---------- List of Schemes (master catalog, from the schemes workbook) ---
+class SchemeMasterListItem(BaseModel):
+    """One row of the 'List of Schemes' page."""
+    sl_no: int
+    id: str
+    code: Optional[str] = None
+    name: str
+    applied_count: int
+
+
+class SchemeProfileOut(BaseModel):
+    """Full scheme profile - every field sourced from the master schemes
+    workbook (SugamSeva_Master_Schemes_Documents_ProblemCategories.xlsx),
+    plus live applied/used counts computed from citizen activity."""
+    id: str
+    code: Optional[str] = None
+    name: str
+    government_level: Optional[str] = None
+    scheme_type: Optional[str] = None
+    ministry: Optional[str] = None
+    year_of_launch: Optional[str] = None
+    source_sector: Optional[str] = None
+    source_summary: Optional[str] = None
+    source: Optional[str] = None
+    problem_category: Optional[str] = None
+    problem_mapping_note: Optional[str] = None
+    candidate_documents: List[str] = []
+    document_mapping_note: Optional[str] = None
+    data_source: Optional[str] = None
+    applied_count: int
+    used_count: int
+
+
 class AISuggestionRequest(BaseModel):
     scheme_id: str
     citizen_id: str

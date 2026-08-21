@@ -9,6 +9,8 @@ import ListOfUsers from "./pages/ListOfUsers";
 import UserProfile from "./pages/UserProfile";
 import VoteOfProblems from "./pages/VoteOfProblems";
 import ProblemDetails from "./pages/ProblemDetails";
+import ListOfSchemes from "./pages/ListOfSchemes";
+import SchemeProfile from "./pages/SchemeProfile";
 import Schemes from "./pages/Schemes";
 import SchemeDetail from "./pages/SchemeDetail";
 import OfficialProfile from "./pages/OfficialProfile";
@@ -31,6 +33,8 @@ export default function App() {
       <Route path="/users/:userId" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
       <Route path="/problems" element={<ProtectedRoute><VoteOfProblems /></ProtectedRoute>} />
       <Route path="/problems/:problemId" element={<ProtectedRoute><ProblemDetails /></ProtectedRoute>} />
+      <Route path="/scheme-list" element={<ProtectedRoute><ListOfSchemes /></ProtectedRoute>} />
+      <Route path="/scheme-list/:schemeId" element={<ProtectedRoute><SchemeProfile /></ProtectedRoute>} />
       <Route path="/schemes" element={<ProtectedRoute><Schemes /></ProtectedRoute>} />
       <Route path="/schemes/:schemeId" element={<ProtectedRoute><SchemeDetail /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><OfficialProfile /></ProtectedRoute>} />

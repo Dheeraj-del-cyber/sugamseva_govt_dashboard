@@ -4,6 +4,7 @@ import {
   UserPlus,
   Users,
   Vote,
+  ClipboardList,
   Landmark,
   UserCircle,
   LogOut,
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { to: "/add-user", label: "Add Users", icon: UserPlus },
   { to: "/users", label: "List of Users", icon: Users },
   { to: "/problems", label: "Vote of Problems", icon: Vote },
+  { to: "/scheme-list", label: "List of Schemes", icon: ClipboardList },
   { to: "/schemes", label: "Schemes Near People", icon: Landmark },
   { to: "/profile", label: "Official Profile", icon: UserCircle },
 ];
