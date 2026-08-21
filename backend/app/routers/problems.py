@@ -12,6 +12,7 @@ router = APIRouter(prefix="/problems", tags=["Problems / Voting"])
 @router.get("", response_model=list[schemas.ProblemListItem])
 def list_problems(
     search: str | None = None,
+    status: str | None = None,
     top: int | None = None,
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
@@ -19,6 +20,10 @@ def list_problems(
     query = db.query(models.Problem)
     if search:
         query = query.filter(models.Problem.title.ilike(f"%{search}%"))
+            if status == "solved":
+        query = query.filter(models.Problem.is_solved == True)  # noqa: E712
+    elif status == "in-progress":
+        query = query.filter(models.Problem.is_solved == False)  # noqa: E712
     query = query.order_by(models.Problem.total_votes.desc())
     if top:
         query = query.limit(top)
