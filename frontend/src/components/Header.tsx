@@ -1,4 +1,4 @@
-import { Menu, Bell } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -42,16 +42,6 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
-        <button
-          className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-ink-100 text-ink-700 relative"
-          aria-label="Notifications"
-        >
-          <Bell size={18} />
-          <span
-            className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: "var(--color-saffron-500)" }}
-          />
-        </button>
         <Link to="/profile" className="flex items-center gap-2 pl-2 border-l border-ink-100">
           <div
             className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
