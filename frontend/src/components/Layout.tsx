@@ -15,7 +15,7 @@ export default function Layout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: "var(--color-paper)" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "var(--color-paper)" }}>
       <Sidebar open={sidebarOpen} />
       {sidebarOpen && (
         <div
@@ -23,9 +23,9 @@ export default function Layout({
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex flex-col min-h-screen min-w-0 lg:pl-64">
         <Header title={title} backTo={backTo} onMenuClick={() => setSidebarOpen((v) => !v)} />
-        <main className="flex-1 px-4 sm:px-6 py-6 max-w-7xl w-full mx-auto">{children}</main>
+        <main className="flex-1 px-4 sm:px-6 py-6 pb-20 max-w-7xl w-full mx-auto">{children}</main>
         <Footer />
       </div>
     </div>

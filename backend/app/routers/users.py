@@ -250,6 +250,38 @@ def get_user_profile(
     return _to_profile(db, citizen)
 
 
+@router.delete("/{user_id}")
+def delete_citizen(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    """Permanently deletes a citizen and every record tied to them
+    (documents, fingerprints, problem votes, scheme usage history) - an
+    irreversible administrative action available on that citizen's profile.
+    Any problem this citizen had voted for has its vote/solved counters
+    adjusted down so the shared Vote of Problems totals stay accurate."""
+    citizen = db.query(models.Citizen).filter(models.Citizen.id == user_id).first()
+    if not citizen:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    full_name = citizen.full_name
+
+    for vote in citizen.votes:
+        problem = vote.problem
+        if problem:
+            problem.total_votes = max(0, problem.total_votes - 1)
+            if vote.solved:
+                problem.solved_votes = max(0, problem.solved_votes - 1)
+            if problem.total_votes == 0:
+                problem.is_solved = False
+
+    db.delete(citizen)
+    db.commit()
+
+    return {"deleted": True, "user_id": user_id, "full_name": full_name}
+
+
 @router.post("/{user_id}/documents/upload", response_model=schemas.DocumentOut)
 async def upload_document(
     user_id: str,

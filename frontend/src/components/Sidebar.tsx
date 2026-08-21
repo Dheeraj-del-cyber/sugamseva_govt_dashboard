@@ -26,11 +26,11 @@ export default function Sidebar({ open }: { open: boolean }) {
 
   return (
     <aside
-      className={`fixed z-30 inset-y-0 left-0 w-64 bg-navy-900 text-white flex flex-col transition-transform duration-200
-      ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static`}
+      className={`fixed z-30 inset-y-0 left-0 h-screen w-64 bg-navy-900 text-white flex flex-col overflow-hidden transition-transform duration-200
+      ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
       style={{ backgroundColor: "var(--color-navy-900)" }}
     >
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10 shrink-0">
         <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
           <ShieldCheck size={20} className="text-saffron-500" style={{ color: "var(--color-saffron-500)" }} />
         </div>
@@ -40,7 +40,7 @@ export default function Sidebar({ open }: { open: boolean }) {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-1">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
@@ -62,7 +62,7 @@ export default function Sidebar({ open }: { open: boolean }) {
         ))}
       </nav>
 
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-white/10 shrink-0">
         <button
           onClick={() => {
             logout();

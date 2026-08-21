@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Fingerprint,
   Lock,
@@ -14,6 +14,9 @@ import {
   ShieldCheck,
   Award,
   Search,
+  Trash2,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, StatusPill, PrimaryButton, SecondaryButton } from "../components/UI";
@@ -64,6 +67,7 @@ interface Profile {
 
 export default function UserProfile() {
   const { userId } = useParams();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [matchedFingerName, setMatchedFingerName] = useState<string | null>(null);
@@ -73,6 +77,12 @@ export default function UserProfile() {
   // Modals
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [selectedDocForView, setSelectedDocForView] = useState<DocumentOut | null>(null);
+
+  // Delete Citizen
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   // Additional Document Upload Modal
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -109,6 +119,20 @@ export default function UserProfile() {
   useEffect(() => {
     loadProfile();
   }, [userId]);
+
+  const handleDeleteCitizen = async () => {
+    if (!userId || !profile) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api.delete(`/users/${userId}`);
+      navigate("/users");
+    } catch (err: any) {
+      setDeleteError(err?.response?.data?.detail || "Failed to delete citizen");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleBiometricSuccess = async (token: string, matchedFinger: string) => {
     if (!userId || !profile) return;
@@ -220,6 +244,17 @@ export default function UserProfile() {
             <SecondaryButton type="button" onClick={() => setShowUploadModal(true)}>
               <UploadCloud size={14} /> Upload Document
             </SecondaryButton>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteConfirmText("");
+                setDeleteError("");
+                setShowDeleteModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 size={14} /> Delete Citizen
+            </button>
           </div>
         </Card>
 
@@ -597,6 +632,70 @@ export default function UserProfile() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Citizen Confirmation Modal */}
+      {showDeleteModal && profile && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-ink-100 p-6 relative">
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="absolute top-4 right-4 text-ink-500 hover:text-ink-900"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-start gap-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-lg text-ink-900">Delete Citizen</h3>
+                <p className="text-xs text-ink-500 mt-1">
+                  This permanently deletes <strong>{profile.full_name}</strong>&apos;s entire record — documents,
+                  fingerprints, problem votes, and scheme history. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <label className="block mb-4">
+              <span className="text-xs font-semibold text-ink-700">
+                Type <strong>{profile.full_name}</strong> to confirm
+              </span>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={profile.full_name}
+                className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-red-400"
+                style={{ borderColor: "var(--color-ink-300)" }}
+              />
+            </label>
+
+            {deleteError && (
+              <p className="text-xs font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 mb-4">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex gap-3">
+              <SecondaryButton type="button" className="flex-1" onClick={() => setShowDeleteModal(false)}>
+                Cancel
+              </SecondaryButton>
+              <button
+                type="button"
+                onClick={handleDeleteCitizen}
+                disabled={deleting || deleteConfirmText.trim() !== profile.full_name.trim()}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white disabled:opacity-40 transition-colors"
+                style={{ backgroundColor: "var(--color-red-600, #dc2626)" }}
+              >
+                <Trash2 size={14} />
+                {deleting ? "Deleting..." : "Delete Permanently"}
+              </button>
+            </div>
           </div>
         </div>
       )}

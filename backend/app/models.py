@@ -53,8 +53,8 @@ class Citizen(Base):
 
     documents = relationship("CitizenDocument", back_populates="citizen", cascade="all, delete-orphan")
     fingerprints = relationship("CitizenFingerprint", back_populates="citizen", cascade="all, delete-orphan", order_by="CitizenFingerprint.finger_index")
-    votes = relationship("ProblemVote", back_populates="citizen")
-    scheme_usages = relationship("SchemeUsage", back_populates="citizen")
+    votes = relationship("ProblemVote", back_populates="citizen", cascade="all, delete-orphan")
+    scheme_usages = relationship("SchemeUsage", back_populates="citizen", cascade="all, delete-orphan")
 
 
 class CitizenFingerprint(Base):
