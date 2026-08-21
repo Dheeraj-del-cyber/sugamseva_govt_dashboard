@@ -55,6 +55,33 @@ def get_problem(problem_id: str, db: Session = Depends(get_db), current: models.
     return problem
 
 
+@router.patch("/{problem_id}", response_model=schemas.ProblemDetailOut)
+def update_problem(
+    problem_id: str,
+    payload: schemas.ProblemUpdateRequest,
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    """Edit a problem's title, description or category. Vote counts and
+    solved status are untouched - only the reported details change."""
+    problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    if payload.title is not None:
+        if not payload.title.strip():
+            raise HTTPException(status_code=400, detail="Problem title cannot be empty")
+        problem.title = payload.title
+    if payload.description is not None:
+        problem.description = payload.description
+    if payload.category is not None:
+        problem.category = payload.category
+
+    db.commit()
+    db.refresh(problem)
+    return problem
+
+
 @router.get("/{problem_id}/users", response_model=list[schemas.ProblemAffectedUser])
 def get_problem_users(problem_id: str, db: Session = Depends(get_db), current: models.Official = Depends(get_current_official)):
     problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()

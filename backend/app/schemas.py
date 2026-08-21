@@ -177,6 +177,12 @@ class ProblemCreateRequest(BaseModel):
     category: Optional[str] = None
 
 
+class ProblemUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+
 class ProblemListItem(BaseModel):
     sl_no: int
     id: str
@@ -217,6 +223,21 @@ class ProblemAffectedUser(BaseModel):
 class MarkSolvedRequest(BaseModel):
     citizen_id: str
     fingerprint_verification_token: str
+
+
+class CitizenProblemItem(BaseModel):
+    """A single problem as reported/voted by one specific citizen - used by
+    the Problems section on that citizen's profile / Add User page."""
+    vote_id: str
+    problem_id: str
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    total_votes: int
+    solved_votes: int
+    is_solved: bool
+    solved: bool  # this citizen's own vote resolution status
+    reported_at: datetime
 
 
 # ---------- Schemes --------------------------------------------------

@@ -447,10 +447,11 @@ def delete_document(
     current: models.Official = Depends(get_current_official),
 ):
     """Deletes a citizen's uploaded document, both the database record and
-    the stored file on disk. Per Government of India security policy this
-    requires the same fresh biometric fingerprint verification as viewing
-    the document - an official cannot delete a citizen's document without
-    the citizen re-verifying on the sensor first."""
+    the stored file bytes (kept only in the database, not on disk). Per
+    Government of India security policy this requires the same fresh
+    biometric fingerprint verification as viewing the document - an
+    official cannot delete a citizen's document without the citizen
+    re-verifying on the sensor first."""
     if not biometric.check_verification_token(payload.fingerprint_verification_token):
         raise HTTPException(status_code=401, detail="Valid biometric fingerprint verification required")
 
@@ -466,3 +467,78 @@ def delete_document(
     db.commit()
 
     return {"deleted": True, "doc_id": doc_id}
+
+
+def _to_citizen_problem_item(vote: models.ProblemVote) -> schemas.CitizenProblemItem:
+    problem = vote.problem
+    return schemas.CitizenProblemItem(
+        vote_id=vote.id,
+        problem_id=problem.id,
+        title=problem.title,
+        description=problem.description,
+        category=problem.category,
+        total_votes=problem.total_votes,
+        solved_votes=problem.solved_votes,
+        is_solved=problem.is_solved,
+        solved=vote.solved,
+        reported_at=vote.created_at,
+    )
+
+
+@router.get("/{user_id}/problems", response_model=list[schemas.CitizenProblemItem])
+def list_citizen_problems(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    """Every civic problem this citizen has reported/voted for, in the order
+    they were reported - powers the Problems section on the citizen's
+    profile and the Add User screen (Problem 1, Problem 2, ...)."""
+    citizen = db.query(models.Citizen).filter(models.Citizen.id == user_id).first()
+    if not citizen:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    votes = sorted(citizen.votes, key=lambda v: v.created_at)
+    return [_to_citizen_problem_item(v) for v in votes]
+
+
+@router.post("/{user_id}/problems", response_model=schemas.CitizenProblemItem)
+def add_citizen_problem(
+    user_id: str,
+    payload: schemas.ProblemCreateRequest,
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    """Reports a new civic problem on behalf of this citizen: creates the
+    Problem record and immediately registers this citizen's vote for it, so
+    it shows up in both this citizen's Problems section and the shared
+    Vote of Problems list."""
+    citizen = db.query(models.Citizen).filter(models.Citizen.id == user_id).first()
+    if not citizen:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not payload.title or not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Problem title is required")
+
+    problem = models.Problem(
+        title=payload.title,
+        description=payload.description,
+        category=payload.category,
+        added_by_official_id=current.id,
+    )
+    db.add(problem)
+    db.flush()
+
+    vote = models.ProblemVote(problem_id=problem.id, citizen_id=user_id)
+    db.add(vote)
+    problem.total_votes += 1
+    db.commit()
+    db.refresh(problem)
+    db.refresh(vote)
+
+    notify.send_sms(
+        citizen.phone_number,
+        f"Namaste {citizen.full_name}, your reported issue '{problem.title}' has been recorded. Thank you.",
+    )
+
+    return _to_citizen_problem_item(vote)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   UploadCloud,
   CheckCircle2,
@@ -8,6 +8,11 @@ import {
   Loader2,
   Search,
   Fingerprint,
+  Plus,
+  Pencil,
+  AlertTriangle,
+  ExternalLink,
+  X,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, PrimaryButton, SecondaryButton, TextField } from "../components/UI";
@@ -33,6 +38,19 @@ interface UploadedDoc {
   doc_number?: string;
   mime_type?: string;
   extracted_text?: string;
+}
+
+interface CitizenProblemItem {
+  vote_id: string;
+  problem_id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  total_votes: number;
+  solved_votes: number;
+  is_solved: boolean;
+  solved: boolean;
+  reported_at: string;
 }
 
 export default function AddUser() {
@@ -70,12 +88,121 @@ export default function AddUser() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Civic problems reported by this citizen
+  const [citizenProblems, setCitizenProblems] = useState<CitizenProblemItem[]>([]);
+  const [showAddProblemModal, setShowAddProblemModal] = useState(false);
+  const [showEditProblemModal, setShowEditProblemModal] = useState(false);
+  const [editingProblem, setEditingProblem] = useState<CitizenProblemItem | null>(null);
+  const [problemTitle, setProblemTitle] = useState("");
+  const [problemDescription, setProblemDescription] = useState("");
+  const [problemCategory, setProblemCategory] = useState("");
+  const [savingProblem, setSavingProblem] = useState(false);
+  const [problemError, setProblemError] = useState("");
+
+  // Fingerprint-gated "mark solved"
+  const [pendingSolveProblemId, setPendingSolveProblemId] = useState<string | null>(null);
+  const [showSolveVerifyModal, setShowSolveVerifyModal] = useState(false);
+  const [solvingProblemId, setSolvingProblemId] = useState<string | null>(null);
+
   useEffect(() => {
     api
       .get("/documents/types")
       .then(({ data }) => setDocCatalog(data))
       .catch(() => setDocCatalog([]));
   }, []);
+
+  const loadCitizenProblems = () => {
+    if (!createdUserId) return;
+    api
+      .get(`/users/${createdUserId}/problems`)
+      .then(({ data }) => setCitizenProblems(data))
+      .catch(() => setCitizenProblems([]));
+  };
+
+  useEffect(loadCitizenProblems, [createdUserId]);
+
+  const openAddProblemModal = () => {
+    setEditingProblem(null);
+    setProblemTitle("");
+    setProblemDescription("");
+    setProblemCategory("");
+    setProblemError("");
+    setShowAddProblemModal(true);
+  };
+
+  const openEditProblemModal = (p: CitizenProblemItem) => {
+    setEditingProblem(p);
+    setProblemTitle(p.title);
+    setProblemDescription(p.description || "");
+    setProblemCategory(p.category || "");
+    setProblemError("");
+    setShowEditProblemModal(true);
+  };
+
+  const handleAddProblem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createdUserId) return;
+    setSavingProblem(true);
+    setProblemError("");
+    try {
+      await api.post(`/users/${createdUserId}/problems`, {
+        title: problemTitle,
+        description: problemDescription || undefined,
+        category: problemCategory || undefined,
+      });
+      setShowAddProblemModal(false);
+      loadCitizenProblems();
+    } catch (err: any) {
+      setProblemError(err?.response?.data?.detail || "Failed to add problem");
+    } finally {
+      setSavingProblem(false);
+    }
+  };
+
+  const handleEditProblem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProblem) return;
+    setSavingProblem(true);
+    setProblemError("");
+    try {
+      await api.patch(`/problems/${editingProblem.problem_id}`, {
+        title: problemTitle,
+        description: problemDescription,
+        category: problemCategory,
+      });
+      setShowEditProblemModal(false);
+      setEditingProblem(null);
+      loadCitizenProblems();
+    } catch (err: any) {
+      setProblemError(err?.response?.data?.detail || "Failed to update problem");
+    } finally {
+      setSavingProblem(false);
+    }
+  };
+
+  const handleRequestMarkSolved = (problemId: string) => {
+    setPendingSolveProblemId(problemId);
+    setShowSolveVerifyModal(true);
+  };
+
+  const handleSolveBiometricSuccess = async (token: string) => {
+    setShowSolveVerifyModal(false);
+    if (!pendingSolveProblemId || !createdUserId) return;
+    setSolvingProblemId(pendingSolveProblemId);
+    setProblemError("");
+    try {
+      await api.post(`/problems/${pendingSolveProblemId}/mark-solved`, {
+        citizen_id: createdUserId,
+        fingerprint_verification_token: token,
+      });
+      loadCitizenProblems();
+    } catch (err: any) {
+      setProblemError(err?.response?.data?.detail || "Could not mark problem as solved.");
+    } finally {
+      setSolvingProblemId(null);
+      setPendingSolveProblemId(null);
+    }
+  };
 
   const handleEnrollmentComplete = (fingers: EnrolledFinger[]) => {
     setEnrolledFingers(fingers);
@@ -498,6 +625,123 @@ export default function AddUser() {
             </div>
           </Card>
 
+          {/* Section 4: Civic Problems Reported by Citizen */}
+          <Card className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-ink-500">
+                  Step 4: Civic Problems Reported by Citizen
+                </p>
+                <p className="text-xs text-ink-500 mt-0.5">
+                  Log grievances on this citizen&apos;s behalf and track resolution — synced with Vote of Problems
+                </p>
+              </div>
+              <PrimaryButton type="button" onClick={openAddProblemModal} disabled={!createdUserId}>
+                <Plus size={14} /> Add Problem
+              </PrimaryButton>
+            </div>
+
+            {!createdUserId && (
+              <p className="text-xs text-ink-400 italic mb-1">
+                Save the citizen's personal details in Step 2 first to unlock problem reporting.
+              </p>
+            )}
+
+            {problemError && (
+              <p className="text-xs font-medium px-3 py-2.5 rounded-lg mb-4 bg-red-50 text-red-600 border border-red-200">
+                {problemError}
+              </p>
+            )}
+
+            {createdUserId && (
+              <div className="space-y-3">
+                {citizenProblems.length === 0 ? (
+                  <p className="text-xs text-ink-400 italic py-2">
+                    No problems reported for this citizen yet.
+                  </p>
+                ) : (
+                  citizenProblems.map((p, idx) => (
+                    <div
+                      key={p.vote_id}
+                      className="p-4 rounded-xl border border-ink-200 bg-white hover:border-ink-300 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-ink-400">
+                              Problem {idx + 1}
+                            </span>
+                            {p.category && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700">
+                                {p.category}
+                              </span>
+                            )}
+                            {p.solved ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                                <CheckCircle2 size={10} /> Solved
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                Pending
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm font-bold text-ink-900 mt-1.5 truncate">{p.title}</p>
+                          {p.description && (
+                            <p className="text-xs text-ink-500 mt-1 line-clamp-2">{p.description}</p>
+                          )}
+                          <p className="text-[11px] text-ink-400 mt-2">
+                            {p.total_votes} total vote{p.total_votes === 1 ? "" : "s"} across all citizens &middot;{" "}
+                            {p.solved_votes} confirmed solved
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-ink-100 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditProblemModal(p)}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border border-ink-200 text-ink-700 hover:bg-ink-100"
+                        >
+                          <Pencil size={12} /> Edit Problem
+                        </button>
+
+                        {!p.solved && (
+                          <button
+                            type="button"
+                            onClick={() => handleRequestMarkSolved(p.problem_id)}
+                            disabled={solvingProblemId === p.problem_id}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-md text-white disabled:opacity-40 transition-colors"
+                            style={{ backgroundColor: "var(--color-green-600)" }}
+                          >
+                            <Fingerprint size={12} />
+                            {solvingProblemId === p.problem_id ? "Verifying..." : "Mark Problem Solved"}
+                          </button>
+                        )}
+
+                        <Link
+                          to={`/problems/${p.problem_id}`}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-md hover:underline ml-auto"
+                          style={{ color: "var(--color-gov-blue-600)" }}
+                        >
+                          View in Vote of Problems <ExternalLink size={11} />
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-start gap-2.5 text-xs text-ink-600 rounded-xl p-3.5 bg-ink-100/60 border border-ink-200">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-ink-500" />
+              <span>
+                Marking a problem solved requires the citizen&apos;s own live fingerprint verification on the
+                sensor, and cannot be reverted once confirmed — same rule enforced in Vote of Problems.
+              </span>
+            </div>
+          </Card>
+
           {createdUserId && (
             <div className="flex justify-end gap-3 pt-2">
               <SecondaryButton type="button" onClick={() => navigate("/users")}>
@@ -537,6 +781,134 @@ export default function AddUser() {
         onDeleteDocument={handleDeleteDocument}
         changing={uploadingDoc === selectedDocForView?.doc_type}
       />
+
+      {/* Add Problem Modal */}
+      {showAddProblemModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-ink-100 p-6 relative">
+            <button
+              onClick={() => setShowAddProblemModal(false)}
+              className="absolute top-4 right-4 text-ink-500 hover:text-ink-900"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+            <h3 className="font-display font-bold text-lg text-ink-900 mb-1">Add Problem</h3>
+            <p className="text-xs text-ink-500 mb-4">
+              Reports a new civic grievance and registers this citizen&apos;s vote for it.
+            </p>
+            <form onSubmit={handleAddProblem} className="space-y-4">
+              <TextField
+                label="Problem Title"
+                required
+                value={problemTitle}
+                onChange={(e) => setProblemTitle(e.target.value)}
+                placeholder="e.g. Broken streetlight on MG Road"
+              />
+              <TextField
+                label="Category (Optional)"
+                value={problemCategory}
+                onChange={(e) => setProblemCategory(e.target.value)}
+                placeholder="e.g. Roads, Water Supply, Electricity"
+              />
+              <label className="block">
+                <span className="text-xs font-semibold text-ink-700">Description</span>
+                <textarea
+                  value={problemDescription}
+                  onChange={(e) => setProblemDescription(e.target.value)}
+                  rows={3}
+                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
+                  style={{ borderColor: "var(--color-ink-300)" }}
+                />
+              </label>
+              {problemError && (
+                <p className="text-xs font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">
+                  {problemError}
+                </p>
+              )}
+              <div className="flex gap-3 pt-2">
+                <SecondaryButton type="button" className="flex-1" onClick={() => setShowAddProblemModal(false)}>
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton type="submit" className="flex-1" disabled={savingProblem}>
+                  {savingProblem ? "Adding..." : "Add Problem"}
+                </PrimaryButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Problem Modal */}
+      {showEditProblemModal && editingProblem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-ink-100 p-6 relative">
+            <button
+              onClick={() => setShowEditProblemModal(false)}
+              className="absolute top-4 right-4 text-ink-500 hover:text-ink-900"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+            <h3 className="font-display font-bold text-lg text-ink-900 mb-1">Edit Problem</h3>
+            <p className="text-xs text-ink-500 mb-4">
+              Updates the reported details. Vote counts and solved status are unaffected.
+            </p>
+            <form onSubmit={handleEditProblem} className="space-y-4">
+              <TextField
+                label="Problem Title"
+                required
+                value={problemTitle}
+                onChange={(e) => setProblemTitle(e.target.value)}
+              />
+              <TextField
+                label="Category (Optional)"
+                value={problemCategory}
+                onChange={(e) => setProblemCategory(e.target.value)}
+              />
+              <label className="block">
+                <span className="text-xs font-semibold text-ink-700">Description</span>
+                <textarea
+                  value={problemDescription}
+                  onChange={(e) => setProblemDescription(e.target.value)}
+                  rows={3}
+                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
+                  style={{ borderColor: "var(--color-ink-300)" }}
+                />
+              </label>
+              {problemError && (
+                <p className="text-xs font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">
+                  {problemError}
+                </p>
+              )}
+              <div className="flex gap-3 pt-2">
+                <SecondaryButton type="button" className="flex-1" onClick={() => setShowEditProblemModal(false)}>
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton type="submit" className="flex-1" disabled={savingProblem}>
+                  {savingProblem ? "Saving..." : "Save Changes"}
+                </PrimaryButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Mark Problem Solved - Biometric Verification */}
+      {createdUserId && (
+        <BiometricVerifyModal
+          isOpen={showSolveVerifyModal}
+          onClose={() => {
+            setShowSolveVerifyModal(false);
+            setPendingSolveProblemId(null);
+          }}
+          onSuccess={handleSolveBiometricSuccess}
+          subjectType="citizen"
+          subjectId={createdUserId}
+          title="Verify Fingerprint to Mark Problem Solved"
+          description="Ask the citizen to place either enrolled finger (Right Thumb or Left Thumb) on the sensor to confirm this problem has been resolved. This cannot be reverted."
+        />
+      )}
     </Layout>
   );
 }
