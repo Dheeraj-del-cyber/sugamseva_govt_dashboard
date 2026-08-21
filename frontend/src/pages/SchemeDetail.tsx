@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CheckCircle2, XCircle, Sparkles, Users, Send } from "lucide-react";
+import { Sparkles, Users, Send } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, PrimaryButton, SecondaryButton } from "../components/UI";
 import { api } from "../api/client";
@@ -9,8 +9,6 @@ interface SchemeDetail {
   id: string;
   name: string;
   summary?: string;
-  pros: string[];
-  cons: string[];
   eligible_not_applied: number;
   used_count: number;
   missed_count: number;
@@ -81,35 +79,8 @@ export default function SchemeDetail() {
       <div className="max-w-4xl mx-auto space-y-6">
         <Card className="p-6 text-center">
           <h2 className="font-display text-2xl font-bold text-ink-900">{scheme.name}</h2>
-          <p className="text-sm text-ink-500 mt-3 max-w-xl mx-auto">{scheme.summary}</p>
+          <p className="text-sm text-ink-500 mt-3 max-w-2xl mx-auto leading-relaxed">{scheme.summary}</p>
         </Card>
-
-        <div className="grid sm:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <h3 className="font-display font-bold text-ink-900 mb-3 flex items-center gap-2">
-              <CheckCircle2 size={16} style={{ color: "var(--color-green-600)" }} /> Pros
-            </h3>
-            <ul className="space-y-2 text-sm text-ink-700">
-              {scheme.pros.map((p, i) => (
-                <li key={i} className="flex gap-2">
-                  <span style={{ color: "var(--color-green-600)" }}>&bull;</span> {p}
-                </li>
-              ))}
-            </ul>
-          </Card>
-          <Card className="p-5">
-            <h3 className="font-display font-bold text-ink-900 mb-3 flex items-center gap-2">
-              <XCircle size={16} style={{ color: "var(--color-red-600)" }} /> Cons
-            </h3>
-            <ul className="space-y-2 text-sm text-ink-700">
-              {scheme.cons.map((c, i) => (
-                <li key={i} className="flex gap-2">
-                  <span style={{ color: "var(--color-red-600)" }}>&bull;</span> {c}
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
 
         <div className="grid sm:grid-cols-3 gap-4">
           <StatButton

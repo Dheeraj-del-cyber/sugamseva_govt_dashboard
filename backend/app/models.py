@@ -161,6 +161,7 @@ class Scheme(Base):
     __tablename__ = "schemes"
 
     id = Column(String, primary_key=True, default=gen_id)
+    code = Column(String, unique=True, index=True, nullable=True)  # master scheme code e.g. "SCH-0001"
     name = Column(String, nullable=False)
     category = Column(String, nullable=True)
     ministry = Column(String, nullable=True)
@@ -171,6 +172,20 @@ class Scheme(Base):
     portal_source = Column(String, default="MyScheme / UMANG / National Portal")
     benefit_amount = Column(String, nullable=True)
     active = Column(Boolean, default=True)
+
+    # ---- Fields sourced directly from the master schemes workbook
+    # (SugamSeva_Master_Schemes_Documents_ProblemCategories.xlsx, "All Schemes" sheet) ----
+    government_level = Column(String, nullable=True)
+    scheme_type = Column(String, nullable=True)
+    year_of_launch = Column(String, nullable=True)
+    source_sector = Column(String, nullable=True)
+    source_summary = Column(Text, nullable=True)
+    source = Column(String, nullable=True)
+    problem_category = Column(String, nullable=True)
+    problem_mapping_note = Column(Text, nullable=True)
+    candidate_documents = Column(Text, nullable=True)  # "; " separated, exactly as in the workbook
+    document_mapping_note = Column(Text, nullable=True)
+    data_source = Column(String, nullable=True)
 
     usages = relationship("SchemeUsage", back_populates="scheme")
 

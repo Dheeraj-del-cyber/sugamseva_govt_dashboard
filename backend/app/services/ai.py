@@ -2,7 +2,7 @@
 AI service - Claude LLM integration
 -------------------------------------
 Used for:
-  1. Summarising a government scheme into plain-language pros/cons.
+  1. Summarising a government scheme into plain, easy-to-understand language.
   2. Suggesting alternative schemes/actions for citizens who missed one.
 
 Requires ANTHROPIC_API_KEY. Falls back to a deterministic templated
@@ -27,26 +27,25 @@ def summarize_scheme(name: str, raw_description: str = "") -> dict:
     client = _client()
     if client is None:
         return {
-            "summary": f"{name} is a Government of India welfare scheme. "
-                       f"Configure ANTHROPIC_API_KEY to generate a live AI summary.",
-            "pros": ["Direct benefit to eligible citizens", "Simple application via the portal"],
-            "cons": ["Requires up-to-date documents", "Annual reapplication may be needed"],
+            "summary": f"{name} is a welfare initiative designed to provide essential support and benefits to eligible citizens.",
+            "pros": [],
+            "cons": [],
         }
     prompt = (
-        f"Summarize the Indian government scheme '{name}' for a government official "
-        f"dashboard. Context: {raw_description or 'no extra context provided'}.\n"
-        "Respond ONLY as JSON with keys: summary (2-3 sentences), pros (array of 3 short "
-        "bullet strings), cons (array of 2-3 short bullet strings)."
+        f"Summarize the Indian government scheme '{name}' in simple, easy-to-understand words (1-2 sentences) "
+        f"explaining who benefits and what assistance is provided. Avoid any technical jargon or citations. Context: {raw_description or 'no extra context provided'}.\n"
+        "Respond ONLY as JSON with key: summary (1-2 clear sentences in simple English)."
     )
     msg = client.messages.create(
         model=settings.CLAUDE_MODEL,
-        max_tokens=500,
+        max_tokens=300,
         messages=[{"role": "user", "content": prompt}],
     )
     import json
     text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
     try:
-        return json.loads(text)
+        data = json.loads(text)
+        return {"summary": data.get("summary", text), "pros": [], "cons": []}
     except Exception:
         return {"summary": text, "pros": [], "cons": []}
 

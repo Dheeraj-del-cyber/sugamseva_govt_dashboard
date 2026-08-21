@@ -9,7 +9,6 @@ import {
   Tags,
   Clock,
   Scale,
-  Award,
   Layers,
   Sparkles,
 } from "lucide-react";
@@ -129,7 +128,7 @@ export default function Dashboard() {
                     </td>
                     <td className="py-3 pr-2 text-center">
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-ink-100 text-ink-600">
-                        {p.category || "Civic"}
+                        {p.category || "Others"}
                       </span>
                     </td>
                     <td

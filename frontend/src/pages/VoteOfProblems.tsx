@@ -1,19 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Plus, X } from "lucide-react";
+import { Search } from "lucide-react";
 import Layout from "../components/Layout";
-import {
-  Card,
-  PrimaryButton,
-  SecondaryButton,
-  TextField,
-} from "../components/UI";
+import { Card } from "../components/UI";
 import { api } from "../api/client";
+import { PROBLEM_CATEGORIES, OTHER_PROBLEM_CATEGORY } from "../lib/problemCategories";
 
 interface ProblemListItem {
   sl_no: number;
   id: string;
   title: string;
+  category?: string;
   total_votes: number;
   solved_votes: number;
 }
@@ -22,13 +19,10 @@ export default function VoteOfProblems() {
   const [problems, setProblems] = useState<ProblemListItem[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [category, setCategory] = useState("all");
 
   const load = () => {
-    const params: { search?: string; status?: string } = {};
+    const params: { search?: string; status?: string; category?: string } = {};
 
     if (search) {
       params.search = search;
@@ -38,30 +32,17 @@ export default function VoteOfProblems() {
       params.status = status;
     }
 
+    if (category !== "all") {
+      params.category = category;
+    }
+
     api.get("/problems", { params }).then(({ data }) => setProblems(data));
   };
 
   useEffect(() => {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
-  }, [search, status]);
-
-  const handleAddProblem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await api.post("/problems", {
-        title: newTitle,
-        description: newDescription,
-      });
-      setShowAddModal(false);
-      setNewTitle("");
-      setNewDescription("");
-      load();
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [search, status, category]);
 
   return (
     <Layout title="Vote of Problems">
@@ -100,9 +81,19 @@ export default function VoteOfProblems() {
             <option value="solved">Solved</option>
           </select>
 
-          <PrimaryButton type="button" onClick={() => setShowAddModal(true)}>
-            <Plus size={15} /> Add Problem
-          </PrimaryButton>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="rounded-lg border px-3 py-2.5 text-sm outline-none max-w-[220px]"
+            style={{ borderColor: "var(--color-ink-300)" }}
+          >
+            <option value="all">All Categories</option>
+            {PROBLEM_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="overflow-x-auto">
@@ -111,6 +102,7 @@ export default function VoteOfProblems() {
               <tr className="text-left text-ink-500 text-xs uppercase border-b border-ink-100">
                 <th className="py-2.5 pr-3 font-semibold">Sl.No</th>
                 <th className="py-2.5 pr-3 font-semibold">Problem</th>
+                <th className="py-2.5 pr-3 font-semibold">Category</th>
                 <th className="py-2.5 pr-3 font-semibold text-center">
                   Total Votes
                 </th>
@@ -134,6 +126,11 @@ export default function VoteOfProblems() {
                     >
                       {p.title}
                     </Link>
+                  </td>
+                  <td className="py-3 pr-3">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700 whitespace-nowrap">
+                      {p.category || OTHER_PROBLEM_CATEGORY}
+                    </span>
                   </td>
                   <td
                     className="py-3 pr-3 text-center font-semibold"
@@ -160,7 +157,7 @@ export default function VoteOfProblems() {
               ))}
               {problems.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-ink-500">
+                  <td colSpan={6} className="py-8 text-center text-ink-500">
                     No problems found.
                   </td>
                 </tr>
@@ -169,63 +166,6 @@ export default function VoteOfProblems() {
           </table>
         </div>
       </Card>
-
-      {showAddModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 relative">
-            <button
-              onClick={() => setShowAddModal(false)}
-              className="absolute top-4 right-4 text-ink-500 hover:text-ink-900"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-            <h3 className="font-display font-bold text-lg text-ink-900 mb-4">
-              Add Problem
-            </h3>
-            <form onSubmit={handleAddProblem} className="space-y-4">
-              <TextField
-                label="Problem Title"
-                required
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-              />
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-700">
-                  Description
-                </span>
-                <textarea
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  rows={3}
-                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
-                  style={{ borderColor: "var(--color-ink-300)" }}
-                />
-              </label>
-              <p className="text-xs text-ink-500">
-                Once added, this problem cannot be deleted. Citizens can vote
-                for it going forward.
-              </p>
-              <div className="flex gap-3 pt-2">
-                <SecondaryButton
-                  type="button"
-                  className="flex-1"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  Cancel
-                </SecondaryButton>
-                <PrimaryButton
-                  type="submit"
-                  className="flex-1"
-                  disabled={saving}
-                >
-                  {saving ? "Adding..." : "Add Problem"}
-                </PrimaryButton>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 }

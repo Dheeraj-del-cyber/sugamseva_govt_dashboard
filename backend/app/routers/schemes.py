@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from app.security import get_current_official
-from app.services import ai, notify
+from app.services import ai
 
 router = APIRouter(prefix="/schemes", tags=["Schemes"])
 CURRENT_YEAR = datetime.utcnow().year
@@ -92,12 +92,9 @@ def get_scheme_detail(scheme_id: str, db: Session = Depends(get_db), current: mo
 
     if not scheme.summary:
         ai_result = ai.summarize_scheme(scheme.name)
-        pros, cons = ai_result.get("pros", []), ai_result.get("cons", [])
         summary = ai_result.get("summary", "")
     else:
         summary = scheme.summary
-        pros = [p for p in (scheme.pros or "").split("\n") if p]
-        cons = [c for c in (scheme.cons or "").split("\n") if c]
 
     return schemas.SchemeDetailOut(
         id=scheme.id,
@@ -106,8 +103,8 @@ def get_scheme_detail(scheme_id: str, db: Session = Depends(get_db), current: mo
         ministry=scheme.ministry,
         benefit_amount=scheme.benefit_amount,
         summary=summary,
-        pros=pros,
-        cons=cons,
+        pros=[],
+        cons=[],
         eligible_not_applied=len(not_applied),
         used_count=len(used_ids),
         missed_count=missed,
@@ -172,11 +169,6 @@ def apply_scheme(
         applied.append(cid)
 
     db.commit()
-
-    for cid in applied:
-        citizen = db.query(models.Citizen).filter(models.Citizen.id == cid).first()
-        if citizen:
-            notify.send_sms(citizen.phone_number, f"Namaste! Your application for '{scheme.name}' has been successfully submitted.")
 
     return {"status": "applied", "applied_count": len(applied)}
 

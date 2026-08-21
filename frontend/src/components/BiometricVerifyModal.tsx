@@ -5,7 +5,6 @@ import {
   X,
   RefreshCw,
   ShieldCheck,
-  Cpu,
 } from "lucide-react";
 import { api } from "../api/client";
 import { captureFromSensor } from "../lib/biometricSensor";
