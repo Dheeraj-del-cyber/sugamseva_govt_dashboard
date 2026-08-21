@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShieldCheck, CheckCircle2, ScanLine } from "lucide-react";
+import { CheckCircle2, ScanLine } from "lucide-react";
+import emblem from "../assets/emblem.png";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import FingerprintEnrollment from "../components/FingerprintEnrollment";
@@ -96,9 +97,12 @@ export default function SignUp() {
   return (
     <div className="min-h-screen flex flex-col items-center py-10 px-4" style={{ backgroundColor: "var(--color-paper)" }}>
       <div className="flex items-center gap-2.5 mb-8">
-        <div className="h-10 w-10 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--color-navy-900)" }}>
-          <ShieldCheck size={18} style={{ color: "var(--color-saffron-500)" }} />
-        </div>
+        <img
+          src={emblem}
+          alt="Government of India Emblem"
+          className="h-16 w-auto object-contain"
+          style={{ imageRendering: "-webkit-optimize-contrast" }}
+        />
         <div>
           <p className="text-[11px] uppercase tracking-wide text-ink-500 leading-none">Government of India</p>
           <p className="font-display font-bold text-sm text-navy-900" style={{ color: "var(--color-navy-900)" }}>Sugam Seva</p>

@@ -8,9 +8,9 @@ import {
   Landmark,
   UserCircle,
   LogOut,
-  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import emblem from "../assets/emblem.png";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -33,9 +33,12 @@ export default function Sidebar({ open }: { open: boolean }) {
       style={{ backgroundColor: "var(--color-navy-900)" }}
     >
       <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10 shrink-0">
-        <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-          <ShieldCheck size={20} className="text-saffron-500" style={{ color: "var(--color-saffron-500)" }} />
-        </div>
+        <img
+          src={emblem}
+          alt="Government of India Emblem"
+          className="h-16 w-auto object-contain shrink-0"
+          style={{ imageRendering: "-webkit-optimize-contrast" }}
+        />
         <div className="min-w-0">
           <p className="text-[11px] uppercase tracking-wide text-white/60 leading-none">Government of India</p>
           <p className="font-display font-bold text-sm leading-tight mt-1">Sugam Seva</p>
