@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, StatusPill, SecondaryButton, PrimaryButton, TextField } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
 import BiometricVerifyModal from "../components/BiometricVerifyModal";
 import DocumentViewerModal from "../components/DocumentViewerModal";
 import { api, API_BASE_URL } from "../api/client";
@@ -774,21 +775,12 @@ export default function UserProfile() {
                 onChange={(e) => setProblemTitle(e.target.value)}
                 placeholder="e.g. Broken streetlight on MG Road"
               />
-              <label className="block">
-                <span className="text-xs font-semibold text-ink-700">Category</span>
-                <select
-                  value={problemCategory}
-                  onChange={(e) => setProblemCategory(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
-                  style={{ borderColor: "var(--color-ink-300)" }}
-                >
-                  {PROBLEM_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SearchableSelect
+                label="Category"
+                value={problemCategory}
+                onChange={setProblemCategory}
+                options={PROBLEM_CATEGORIES}
+              />
               <label className="block">
                 <span className="text-xs font-semibold text-ink-700">Description</span>
                 <textarea
