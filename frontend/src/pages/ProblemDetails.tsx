@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Fingerprint, MessageSquare, ShieldAlert, CheckCircle2, UserCheck } from "lucide-react";
+import {
+  Fingerprint,
+  MessageSquare,
+  ShieldAlert,
+  CheckCircle2,
+  UserCheck,
+} from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, PrimaryButton, SecondaryButton } from "../components/UI";
 import BiometricVerifyModal from "../components/BiometricVerifyModal";
@@ -34,6 +40,7 @@ export default function ProblemDetails() {
   const [showBioModal, setShowBioModal] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [notifying, setNotifying] = useState(false);
 
   const load = () => {
     if (!problemId) return;
@@ -58,23 +65,50 @@ export default function ProblemDetails() {
     setShowBioModal(true);
   };
 
-  const handleBiometricSuccess = async (token: string, matchedFinger: string) => {
+  const handleBiometricSuccess = async (
+    token: string,
+    matchedFinger: string,
+  ) => {
     try {
       await api.post(`/problems/${problemId}/mark-solved`, {
         citizen_id: selectedUser,
         fingerprint_verification_token: token,
       });
-      setMessage(`Problem instance confirmed resolved by citizen via ${matchedFinger} biometric verification.`);
+      setMessage(
+        `Problem instance confirmed resolved by citizen via ${matchedFinger} biometric verification.`,
+      );
       load();
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Could not mark as solved");
     }
   };
+  const handleNotifyVoters = async () => {
+    setNotifying(true);
+    setError("");
 
+    try {
+      const { data } = await api.post(`/problems/${problemId}/notify`);
+
+      setMessage(
+        `Status update SMS sent to ${data.notified_count} citizen${
+          data.notified_count === 1 ? "" : "s"
+        }.`,
+      );
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not send status update");
+    } finally {
+      setNotifying(false);
+    }
+  };
   if (!problem) {
     return (
-      <Layout title="Problem Details" backTo={{ to: "/problems", label: "Back to Problems" }}>
-        <p className="text-center text-ink-500 py-12">Loading problem data...</p>
+      <Layout
+        title="Problem Details"
+        backTo={{ to: "/problems", label: "Back to Problems" }}
+      >
+        <p className="text-center text-ink-500 py-12">
+          Loading problem data...
+        </p>
       </Layout>
     );
   }
@@ -82,7 +116,10 @@ export default function ProblemDetails() {
   const selectedCitizen = users.find((u) => u.id === selectedUser);
 
   return (
-    <Layout title="Problem Details" backTo={{ to: "/problems", label: "Back to Problems" }}>
+    <Layout
+      title="Problem Details"
+      backTo={{ to: "/problems", label: "Back to Problems" }}
+    >
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header Information Card */}
         <Card className="p-6">
@@ -91,22 +128,36 @@ export default function ProblemDetails() {
               <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700">
                 {problem.category || "Civic Infrastructure"}
               </span>
-              <h2 className="font-display text-2xl font-bold text-ink-900 mt-2">{problem.title}</h2>
-              <p className="text-sm text-ink-600 mt-2 max-w-xl leading-relaxed">{problem.description}</p>
+              <h2 className="font-display text-2xl font-bold text-ink-900 mt-2">
+                {problem.title}
+              </h2>
+              <p className="text-sm text-ink-600 mt-2 max-w-xl leading-relaxed">
+                {problem.description}
+              </p>
             </div>
             <div className="flex gap-4 shrink-0 bg-ink-50 p-4 rounded-xl border border-ink-200">
               <div className="text-center px-2">
-                <p className="text-3xl font-display font-extrabold" style={{ color: "var(--color-gov-blue-600)" }}>
+                <p
+                  className="text-3xl font-display font-extrabold"
+                  style={{ color: "var(--color-gov-blue-600)" }}
+                >
                   {problem.total_votes}
                 </p>
-                <p className="text-[11px] text-ink-500 font-semibold mt-1">Total Votes</p>
+                <p className="text-[11px] text-ink-500 font-semibold mt-1">
+                  Total Votes
+                </p>
               </div>
               <div className="w-px bg-ink-200" />
               <div className="text-center px-2">
-                <p className="text-3xl font-display font-extrabold" style={{ color: "var(--color-green-600)" }}>
+                <p
+                  className="text-3xl font-display font-extrabold"
+                  style={{ color: "var(--color-green-600)" }}
+                >
                   {problem.solved_votes}
                 </p>
-                <p className="text-[11px] text-ink-500 font-semibold mt-1">Confirmed Solved</p>
+                <p className="text-[11px] text-ink-500 font-semibold mt-1">
+                  Confirmed Solved
+                </p>
               </div>
             </div>
           </div>
@@ -117,13 +168,20 @@ export default function ProblemDetails() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-display font-bold text-ink-900 text-base flex items-center gap-2">
-                <UserCheck size={18} style={{ color: "var(--color-gov-blue-600)" }} /> Citizens Facing This Civic Grievance
+                <UserCheck
+                  size={18}
+                  style={{ color: "var(--color-gov-blue-600)" }}
+                />{" "}
+                Citizens Facing This Civic Grievance
               </h3>
               <p className="text-xs text-ink-500 mt-0.5">
-                Select a citizen to authenticate their grievance resolution via sensor
+                Select a citizen to authenticate their grievance resolution via
+                sensor
               </p>
             </div>
-            <span className="text-xs font-semibold text-ink-500">{users.length} Citizens Voted</span>
+            <span className="text-xs font-semibold text-ink-500">
+              {users.length} Citizens Voted
+            </span>
           </div>
 
           <div className="overflow-x-auto">
@@ -134,8 +192,12 @@ export default function ProblemDetails() {
                   <th className="py-2.5 pr-3 font-semibold">Sl.No</th>
                   <th className="py-2.5 pr-3 font-semibold">Citizen Name</th>
                   <th className="py-2.5 pr-3 font-semibold">Phone Number</th>
-                  <th className="py-2.5 pr-3 font-semibold">Location / Address</th>
-                  <th className="py-2.5 pr-3 font-semibold text-right">Status</th>
+                  <th className="py-2.5 pr-3 font-semibold">
+                    Location / Address
+                  </th>
+                  <th className="py-2.5 pr-3 font-semibold text-right">
+                    Status
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -158,14 +220,23 @@ export default function ProblemDetails() {
                         disabled={u.solved}
                       />
                     </td>
-                    <td className="py-3 pr-3 text-ink-400 text-xs">{u.sl_no}</td>
+                    <td className="py-3 pr-3 text-ink-400 text-xs">
+                      {u.sl_no}
+                    </td>
                     <td className="py-3 pr-3">
-                      <Link to={`/users/${u.id}`} className="font-bold text-ink-900 hover:text-gov-blue-600">
+                      <Link
+                        to={`/users/${u.id}`}
+                        className="font-bold text-ink-900 hover:text-gov-blue-600"
+                      >
                         {u.full_name}
                       </Link>
                     </td>
-                    <td className="py-3 pr-3 text-ink-700 text-xs">{u.phone_number}</td>
-                    <td className="py-3 pr-3 text-ink-600 text-xs max-w-xs truncate">{u.address || "India"}</td>
+                    <td className="py-3 pr-3 text-ink-700 text-xs">
+                      {u.phone_number}
+                    </td>
+                    <td className="py-3 pr-3 text-ink-600 text-xs max-w-xs truncate">
+                      {u.address || "India"}
+                    </td>
                     <td className="py-3 pr-3 text-right">
                       {u.solved ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
@@ -187,11 +258,17 @@ export default function ProblemDetails() {
         {/* Biometric Verification Resolution Action */}
         <Card className="p-5">
           <div className="flex items-start gap-2 text-xs text-ink-600 rounded-xl p-3.5 bg-ink-100/70 border border-ink-200 mb-4">
-            <ShieldAlert size={16} className="mt-0.5 shrink-0 text-gov-blue-600" />
+            <ShieldAlert
+              size={16}
+              className="mt-0.5 shrink-0 text-gov-blue-600"
+            />
             <span>
-              Per Digital Citizen Charter regulations, marking a reported grievance as solved requires
-              the <strong>citizen&apos;s own live biometric fingerprint authentication</strong> on the sensor
-              to prevent premature or unauthorized closures.
+              Per Digital Citizen Charter regulations, marking a reported
+              grievance as solved requires the{" "}
+              <strong>
+                citizen&apos;s own live biometric fingerprint authentication
+              </strong>{" "}
+              on the sensor to prevent premature or unauthorized closures.
             </span>
           </div>
 
@@ -219,8 +296,14 @@ export default function ProblemDetails() {
                 ? `Verify & Mark Solved for ${selectedCitizen.full_name}`
                 : "Select Citizen to Verify with Fingerprint"}
             </PrimaryButton>
-            <SecondaryButton type="button" className="flex-1">
-              <MessageSquare size={16} /> Send SMS Status Update to Citizens
+            <SecondaryButton
+              type="button"
+              className="flex-1"
+              onClick={handleNotifyVoters}
+              disabled={notifying}
+            >
+              <MessageSquare size={16} />
+              {notifying ? "Sending..." : "Send SMS Status Update to Citizens"}
             </SecondaryButton>
           </div>
         </Card>
