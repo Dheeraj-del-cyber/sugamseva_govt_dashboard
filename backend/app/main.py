@@ -4,9 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.routers import auth, officials, users, problems, schemes, scheme_list, dashboard, biometric_router, locations_router
+from app.migrate_schema import run_lightweight_migrations
 from app.seed_schemes import seed_scheme_master
 
 Base.metadata.create_all(bind=engine)
+run_lightweight_migrations(engine)
 
 # Load/refresh the master scheme catalog (from the schemes workbook) on startup.
 with SessionLocal() as _db:
