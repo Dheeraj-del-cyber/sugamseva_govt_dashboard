@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Fingerprint, Eye, EyeOff, ShieldCheck, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Fingerprint, Eye, EyeOff, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { captureFromSensor } from "../lib/biometricSensor";
+import sugamSevaBanner from "../assets/sugam-seva-banner.png";
 
 export default function SignIn() {
   const { login } = useAuth();
@@ -61,40 +62,15 @@ export default function SignIn() {
     <div className="min-h-screen flex flex-col lg:flex-row" style={{ backgroundColor: "var(--color-paper)" }}>
       {/* Branding panel */}
       <div
-        className="lg:w-[42%] relative flex flex-col justify-between px-8 sm:px-12 py-12 text-white overflow-hidden"
+        className="lg:w-[42%] relative overflow-hidden"
         style={{ backgroundColor: "var(--color-navy-900)" }}
       >
-        <div
-          className="pointer-events-none absolute -bottom-24 -left-16 h-72 w-72 rounded-full opacity-10"
-          style={{ backgroundColor: "var(--color-saffron-500)" }}
+        {/* Background artwork */}
+        <img
+          src={sugamSevaBanner}
+          alt="Sugam Seva - Digital Citizen Assistant"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
         />
-        <div
-          className="pointer-events-none absolute top-1/3 -right-20 h-64 w-64 rounded-full opacity-10"
-          style={{ backgroundColor: "var(--color-green-600)" }}
-        />
-
-        <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-full bg-white/10 flex items-center justify-center">
-              <ShieldCheck size={22} style={{ color: "var(--color-saffron-500)" }} />
-            </div>
-            <p className="text-sm font-medium text-white/70">Government of India</p>
-          </div>
-
-          <h1 className="font-display text-4xl sm:text-5xl font-extrabold mt-10 leading-tight">
-            Sugam Seva
-          </h1>
-          <p className="mt-3 text-white/70 max-w-sm">
-            Digital Citizen Assistant for access to national government services, schemes and civic grievance redressal.
-          </p>
-
-          <div className="tricolor-rule w-24 rounded-full mt-8" />
-        </div>
-
-        <div className="relative z-10 flex items-center gap-2 text-xs text-white/60">
-          <Fingerprint size={16} />
-          Biometric Hardware Protected (Windows Hello / Touch ID / STQC RD Service)
-        </div>
       </div>
 
       {/* Sign in card */}
