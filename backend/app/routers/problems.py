@@ -168,3 +168,34 @@ def mark_solved(
     citizen = db.query(models.Citizen).filter(models.Citizen.id == payload.citizen_id).first()
     notify.send_sms(citizen.phone_number, f"Good news! Your reported issue '{problem.title}' has been marked as solved.")
     return {"status": "solved", "solved_votes": problem.solved_votes}
+    @router.post("/{problem_id}/notify")
+def notify_voters(
+    problem_id: str,
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    """Send every citizen who voted for this problem an SMS with the current
+    status (in progress / fully solved), so officials can proactively update
+    citizens without waiting for them to check the app."""
+    problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    status_line = (
+        "has been fully resolved"
+        if problem.is_solved
+        else f"is being worked on ({problem.solved_votes}/{problem.total_votes} confirmed solved)"
+    )
+
+    message = (
+        f"Update on '{problem.title}': this issue {status_line}. "
+        "Thank you for reporting it."
+    )
+
+    sent = 0
+
+    for vote in problem.votes:
+        if notify.send_sms(vote.citizen.phone_number, message):
+            sent += 1
+
+    return {"status": "notified", "notified_count": sent}
