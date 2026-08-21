@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from app.security import get_current_official
-from app.services import ai, notify
+from app.services import ai
 
 router = APIRouter(prefix="/schemes", tags=["Schemes"])
 CURRENT_YEAR = datetime.utcnow().year
@@ -172,11 +172,6 @@ def apply_scheme(
         applied.append(cid)
 
     db.commit()
-
-    for cid in applied:
-        citizen = db.query(models.Citizen).filter(models.Citizen.id == cid).first()
-        if citizen:
-            notify.send_sms(citizen.phone_number, f"Namaste! Your application for '{scheme.name}' has been successfully submitted.")
 
     return {"status": "applied", "applied_count": len(applied)}
 

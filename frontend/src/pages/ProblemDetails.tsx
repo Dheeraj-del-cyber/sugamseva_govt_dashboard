@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   Fingerprint,
-  MessageSquare,
   ShieldAlert,
   CheckCircle2,
   UserCheck,
 } from "lucide-react";
 import Layout from "../components/Layout";
-import { Card, PrimaryButton, SecondaryButton } from "../components/UI";
+import { Card, PrimaryButton } from "../components/UI";
 import BiometricVerifyModal from "../components/BiometricVerifyModal";
 import { api } from "../api/client";
 
@@ -40,7 +39,6 @@ export default function ProblemDetails() {
   const [showBioModal, setShowBioModal] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [notifying, setNotifying] = useState(false);
 
   const load = () => {
     if (!problemId) return;
@@ -80,24 +78,6 @@ export default function ProblemDetails() {
       load();
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Could not mark as solved");
-    }
-  };
-  const handleNotifyVoters = async () => {
-    setNotifying(true);
-    setError("");
-
-    try {
-      const { data } = await api.post(`/problems/${problemId}/notify`);
-
-      setMessage(
-        `Status update SMS sent to ${data.notified_count} citizen${
-          data.notified_count === 1 ? "" : "s"
-        }.`,
-      );
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "Could not send status update");
-    } finally {
-      setNotifying(false);
     }
   };
   if (!problem) {
@@ -296,15 +276,6 @@ export default function ProblemDetails() {
                 ? `Verify & Mark Solved for ${selectedCitizen.full_name}`
                 : "Select Citizen to Verify with Fingerprint"}
             </PrimaryButton>
-            <SecondaryButton
-              type="button"
-              className="flex-1"
-              onClick={handleNotifyVoters}
-              disabled={notifying}
-            >
-              <MessageSquare size={16} />
-              {notifying ? "Sending..." : "Send SMS Status Update to Citizens"}
-            </SecondaryButton>
           </div>
         </Card>
       </div>

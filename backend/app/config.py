@@ -2,7 +2,7 @@
 Sugam Seva - Configuration
 All secrets/API keys are read from environment variables. Sensible local
 defaults are provided so the project runs out of the box in DEMO_MODE,
-where real biometric hardware / SMS gateways are
+where real biometric hardware is
 replaced by mock services (see app/services/*). Swap DEMO_MODE=false and
 fill in the real credentials once your organisation has been onboarded to
 those government APIs.
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 60 * 12
 
     # --- Demo / mock toggle -------------------------------------------
-    # When True, Biometric device, SMS gateway and
+    # When True, Biometric device and
     # AI calls are simulated so the whole app runs without any government
     # or third-party credentials. Flip to False once real API keys below
     # are supplied.
@@ -35,9 +35,6 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:5173"
 
     BIOMETRIC_DEVICE_API_URL: str = ""  # e.g. local RD-service URL for Aadhaar biometric device
-
-    SMS_GATEWAY_API_KEY: str = ""
-    SMS_GATEWAY_BASE_URL: str = ""
 
     FIREBASE_SERVER_KEY: str = ""
 

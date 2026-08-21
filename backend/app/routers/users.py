@@ -10,7 +10,7 @@ from app import models, schemas
 from app.database import get_db
 from app.document_catalog import DOCUMENT_TYPE_CATALOG, VALID_DOCUMENT_TYPES
 from app.security import get_current_official
-from app.services import biometric, notify, ocr
+from app.services import biometric, ocr
 
 router = APIRouter(prefix="/users", tags=["Citizens / Users"])
 documents_router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -198,11 +198,6 @@ def add_user(
 
     db.commit()
     db.refresh(citizen)
-
-    notify.send_sms(
-        citizen.phone_number,
-        f"Namaste {citizen.full_name}, your Sugam Seva profile is successfully registered with dual-finger biometric authentication.",
-    )
 
     return _to_profile(db, citizen)
 
@@ -567,10 +562,5 @@ def add_citizen_problem(
     db.commit()
     db.refresh(problem)
     db.refresh(vote)
-
-    notify.send_sms(
-        citizen.phone_number,
-        f"Namaste {citizen.full_name}, your reported issue '{problem.title}' has been recorded. Thank you.",
-    )
 
     return _to_citizen_problem_item(vote)
