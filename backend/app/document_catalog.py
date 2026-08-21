@@ -247,6 +247,58 @@ DOCUMENT_TYPE_CATALOG: list[dict[str, str]] = [
     {"name": 'Single Woman Certificate', "category": 'Certificates for Specific Circumstances'},
     {"name": 'Transgender Certificate', "category": 'Certificates for Specific Circumstances'},
     {"name": 'Third Gender Certificate', "category": 'Certificates for Specific Circumstances'},
+
+    # ---- Added from SugamSeva_Master_Schemes_Documents_ProblemCategories.xlsx
+    # ("Documents Master" sheet). These are document types referenced as
+    # candidate/eligibility documents by one or more schemes in the master
+    # scheme catalog (see app.scheme_master_data) but were missing here,
+    # which meant an official could never actually select/verify them for a
+    # citizen in Add User - so a citizen could never be marked eligible for
+    # any scheme that required one of them.
+    {"name": 'Aadhaar', "category": 'Government Scheme Application Documents'},
+    {"name": 'Aadhaar Enrolment/Update', "category": 'Identity & Personal Documents'},
+    {"name": 'Aadhaar-bank linking', "category": 'Financial & Banking'},
+    {"name": 'Aadhaar-linked student details', "category": 'Education & Students'},
+    {"name": 'Bank Account', "category": 'Financial & Banking'},
+    {"name": 'Bank Account/IFSC details', "category": 'Government Scheme Application Documents'},
+    {"name": 'Blood Donor registration', "category": 'Health & Healthcare'},
+    {"name": 'Caste Certificate for scholarship', "category": 'Education & Students'},
+    {"name": 'Child Health Records', "category": 'Health & Healthcare'},
+    {"name": 'Child Protection documents', "category": 'Women & Child Welfare'},
+    {"name": 'Child Scholarship documents', "category": 'Women & Child Welfare'},
+    {"name": 'Crop Insurance documents', "category": 'Farmer & Agriculture'},
+    {"name": 'Crop Registration', "category": 'Farmer & Agriculture'},
+    {"name": 'Disability Certificate for scholarship', "category": 'Education & Students'},
+    {"name": 'Disability Pension documents', "category": 'Pension & Social Security'},
+    {"name": 'Divorce Certificate/Order', "category": 'Civil Registration Certificates'},
+    {"name": 'Drinking Water Scheme documents', "category": 'Electricity, Water & Utilities'},
+    {"name": 'EPFO Pension documents', "category": 'Pension & Social Security'},
+    {"name": 'EPFO documents', "category": 'Employment & Labour'},
+    {"name": 'Electricity Connection Documents', "category": 'Electricity, Water & Utilities'},
+    {"name": 'Electricity Subsidy Documents', "category": 'Electricity, Water & Utilities'},
+    {"name": 'Electricity Subsidy documents', "category": 'Housing & Welfare Schemes'},
+    {"name": 'Family Pension documents', "category": 'Pension & Social Security'},
+    {"name": 'Farmer Pension documents', "category": 'Farmer & Agriculture'},
+    {"name": 'Farmer Registration', "category": 'Farmer & Agriculture'},
+    {"name": 'Girl Child Scholarship documents', "category": 'Women & Child Welfare'},
+    {"name": 'Government Employee Pension documents', "category": 'Pension & Social Security'},
+    {"name": 'Immunization Records', "category": 'Health & Healthcare'},
+    {"name": 'Income Certificate for scholarship', "category": 'Education & Students'},
+    {"name": 'Irrigation-related documents', "category": 'Farmer & Agriculture'},
+    {"name": 'Job Card', "category": 'Government Scheme Application Documents'},
+    {"name": 'LPG Connection', "category": 'Electricity, Water & Utilities'},
+    {"name": 'LPG Subsidy documents', "category": 'Electricity, Water & Utilities'},
+    {"name": 'Maternal Health Records', "category": 'Health & Healthcare'},
+    {"name": 'Mobile Number', "category": 'Government Scheme Application Documents'},
+    {"name": 'National Scholarship Portal registration', "category": 'Education & Students'},
+    {"name": 'New Electricity Connection', "category": 'Electricity, Water & Utilities'},
+    {"name": 'Old Age Pension documents', "category": 'Pension & Social Security'},
+    {"name": 'Organ Donation registration', "category": 'Health & Healthcare'},
+    {"name": 'Pollution Under Control (PUC)', "category": 'Transport & Vehicles'},
+    {"name": 'Solar Subsidy documents', "category": 'Electricity, Water & Utilities'},
+    {"name": 'Water Connection Documents', "category": 'Electricity, Water & Utilities'},
+    {"name": 'Widow Pension documents', "category": 'Women & Child Welfare'},
+    {"name": 'Women SHG registration', "category": 'Women & Child Welfare'},
 ]
 
 # Fast O(1) membership check for validating an uploaded doc_type against
