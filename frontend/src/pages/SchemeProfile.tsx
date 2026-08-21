@@ -15,6 +15,7 @@ import {
   Send,
   AlertCircle,
   Clock,
+  Ban,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, PrimaryButton, SecondaryButton } from "../components/UI";
@@ -43,6 +44,10 @@ interface SchemeProfile {
   application_start_date?: string;
   application_end_date?: string;
   apply_url?: string;
+  is_open?: boolean;
+  status?: "open" | "closed" | "upcoming";
+  status_label?: string;
+  days_remaining?: number;
 }
 
 interface PersonRow {
@@ -64,11 +69,16 @@ export default function SchemeProfile() {
   const [copied, setCopied] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applySuccess, setApplySuccess] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   const loadScheme = () => {
     if (!schemeId) return;
     api.get(`/scheme-list/${schemeId}`).then(({ data }) => {
       setScheme(data);
+      // Auto-open missed panel if scheme is closed
+      if (data.status === "closed" || !data.is_open) {
+        setPanel("missed");
+      }
     });
   };
 
@@ -112,8 +122,15 @@ export default function SchemeProfile() {
 
   const handleApplyCitizen = async (citizenId?: string) => {
     if (!schemeId) return;
+    if (scheme && (scheme.status === "closed" || !scheme.is_open)) {
+      setApplyError(`Applications are closed for this scheme (deadline was ${scheme.application_end_date}).`);
+      setTimeout(() => setApplyError(null), 4000);
+      return;
+    }
+
     setApplying(true);
     setApplySuccess(null);
+    setApplyError(null);
     try {
       const payload = citizenId ? { citizen_ids: [citizenId] } : { citizen_ids: [] };
       const { data } = await api.post(`/scheme-list/${schemeId}/apply`, payload);
@@ -121,6 +138,10 @@ export default function SchemeProfile() {
       loadScheme();
       if (panel) loadPanelData(panel);
       setTimeout(() => setApplySuccess(null), 4000);
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Application could not be processed.";
+      setApplyError(errorMsg);
+      setTimeout(() => setApplyError(null), 4000);
     } finally {
       setApplying(false);
     }
@@ -149,7 +170,8 @@ export default function SchemeProfile() {
     );
   }
 
-  const applyLink = scheme.apply_url || `https://www.myscheme.gov.in/schemes/${(scheme.code || 'scheme').toLowerCase()}`;
+  const isClosed = scheme.status === "closed" || scheme.is_open === false;
+  const applyLink = scheme.apply_url || "https://www.myscheme.gov.in/";
   const startDate = scheme.application_start_date || "01 Apr 2025";
   const endDate = scheme.application_end_date || "31 Mar 2026";
 
@@ -171,33 +193,70 @@ export default function SchemeProfile() {
             <p className="text-sm text-ink-500 mt-3 max-w-2xl mx-auto leading-relaxed">{scheme.source_summary}</p>
           )}
 
-          {/* Application Window Badge Banner */}
-          <div className="mt-4 pt-4 border-t border-ink-100 flex flex-wrap items-center justify-center gap-4 text-xs">
+          {/* Application Window & Status Banner */}
+          <div className="mt-4 pt-4 border-t border-ink-100 flex flex-wrap items-center justify-center gap-3 text-xs">
             <div className="flex items-center gap-1.5 text-ink-700 bg-ink-100/70 px-3 py-1.5 rounded-lg">
               <Clock size={14} style={{ color: "var(--color-gov-blue-600)" }} />
               <span className="font-medium">Application Window:</span>
               <span className="font-semibold text-ink-900">{startDate} – {endDate}</span>
             </div>
-            <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Applications Active
-            </div>
+
+            {isClosed ? (
+              <div className="flex items-center gap-1.5 text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-full font-semibold">
+                <span className="h-2 w-2 rounded-full bg-red-600"></span>
+                Scheme Closed (Deadline Passed: {endDate})
+              </div>
+            ) : scheme.status === "upcoming" ? (
+              <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full font-semibold">
+                <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                Upcoming (Opens on {startDate})
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full font-semibold">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Applications Open (Closes {endDate})
+              </div>
+            )}
           </div>
         </Card>
 
-        {/* Official Application Portal / Apply Link Card */}
-        <Card className="p-5 border-2" style={{ borderColor: "var(--color-gov-blue-300)", backgroundColor: "var(--color-gov-blue-50)" }}>
+        {/* Closed Scheme Alert Notice */}
+        {isClosed && (
+          <div className="p-4 rounded-xl border border-red-200 bg-red-50/80 flex items-start gap-3">
+            <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-red-900">
+              <p className="font-bold text-sm text-red-950">Application Period Completed</p>
+              <p className="mt-1 leading-relaxed">
+                The application deadline for this scheme closed on <strong>{endDate}</strong>. New applications cannot be submitted.
+                Below is the list of eligible citizens who <strong>missed this scheme</strong> and did not receive the benefit in time. Use the AI suggestions to recommend available alternative schemes.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Official Application Portal / Apply Link Card (from PDF) */}
+        <Card
+          className="p-5 border-2"
+          style={{
+            borderColor: isClosed ? "var(--color-ink-300)" : "var(--color-gov-blue-300)",
+            backgroundColor: isClosed ? "var(--color-ink-100)" : "var(--color-gov-blue-50)",
+          }}
+        >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-gov-blue-700">Official Apply Portal</span>
-                <span className="text-[11px] text-ink-500">Government Portal Access</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-gov-blue-700">Official Portal Link</span>
+                {isClosed && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700">
+                    Archived Portal
+                  </span>
+                )}
               </div>
               <p className="text-sm font-semibold text-ink-900 truncate">
                 {applyLink}
               </p>
               <p className="text-xs text-ink-500 mt-0.5">
-                Apply online through the national government scheme portal or register citizens directly.
+                Official government portal link for application guidelines, notifications, and portal access.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -220,20 +279,37 @@ export default function SchemeProfile() {
                 <ExternalLink size={14} />
                 Open Portal
               </a>
-              <PrimaryButton
-                type="button"
-                onClick={() => handleApplyCitizen()}
-                disabled={applying}
-              >
-                <Send size={13} />
-                {applying ? "Applying..." : "Enroll Citizens"}
-              </PrimaryButton>
+              {isClosed ? (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-ink-300 text-ink-600 cursor-not-allowed"
+                >
+                  <Ban size={13} />
+                  Application Closed
+                </button>
+              ) : (
+                <PrimaryButton
+                  type="button"
+                  onClick={() => handleApplyCitizen()}
+                  disabled={applying}
+                >
+                  <Send size={13} />
+                  {applying ? "Applying..." : "Enroll Citizens"}
+                </PrimaryButton>
+              )}
             </div>
           </div>
           {applySuccess && (
             <div className="mt-3 p-2.5 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-medium flex items-center gap-2">
               <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
               {applySuccess}
+            </div>
+          )}
+          {applyError && (
+            <div className="mt-3 p-2.5 rounded-lg bg-red-100 border border-red-300 text-red-800 text-xs font-medium flex items-center gap-2">
+              <AlertCircle size={14} className="text-red-600 shrink-0" />
+              {applyError}
             </div>
           )}
         </Card>
@@ -260,31 +336,44 @@ export default function SchemeProfile() {
             accent="saffron"
             active={panel === "missed"}
             onClick={() => openPanel("missed")}
+            highlight={isClosed}
           />
           <StatBlock
             label="Eligible Citizens"
             value={scheme.eligible_count}
             accent="blue"
             active={false}
-            onClick={() => handleApplyCitizen()}
+            onClick={() => {
+              if (!isClosed) handleApplyCitizen();
+            }}
           />
         </div>
 
         {/* People Who Missed / Applied / Used Scheme Panel */}
         {panel && (
-          <Card className="p-5 border-t-4" style={{ borderColor: panel === "missed" ? "var(--color-saffron-500)" : panel === "used" ? "var(--color-green-600)" : "var(--color-gov-blue-600)" }}>
+          <Card
+            className="p-5 border-t-4"
+            style={{
+              borderColor:
+                panel === "missed"
+                  ? "var(--color-saffron-500)"
+                  : panel === "used"
+                  ? "var(--color-green-600)"
+                  : "var(--color-gov-blue-600)",
+            }}
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 {panel === "missed" && <AlertCircle size={18} style={{ color: "var(--color-saffron-500)" }} />}
                 {panel === "used" && <CheckCircle2 size={18} style={{ color: "var(--color-green-600)" }} />}
                 {panel === "applied" && <Users size={18} style={{ color: "var(--color-gov-blue-600)" }} />}
                 <h3 className="font-display font-bold text-ink-900">
-                  {panel === "missed" && "Citizens Who Missed This Scheme"}
-                  {panel === "used" && "Citizens Who Used This Scheme"}
-                  {panel === "applied" && "Citizens Who Applied for This Scheme"}
+                  {panel === "missed" && (isClosed ? "Citizens Who Missed This Scheme (Deadline Completed)" : "Citizens Who Missed This Scheme")}
+                  {panel === "used" && "Citizens Who Received Benefit from This Scheme"}
+                  {panel === "applied" && "Citizens Currently Enrolled / Applied"}
                 </h3>
               </div>
-              {panel === "missed" && (
+              {panel === "missed" && !isClosed && (
                 <PrimaryButton type="button" onClick={() => handleApplyCitizen()} disabled={applying}>
                   <Send size={13} /> {applying ? "Applying..." : "Apply All to Scheme"}
                 </PrimaryButton>
@@ -306,7 +395,12 @@ export default function SchemeProfile() {
                         <p className="text-sm font-bold text-ink-900">{row.full_name}</p>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500 mt-1">
                           {row.phone_number && <span>Phone: <strong className="text-ink-700">{row.phone_number}</strong></span>}
-                          {row.year && <span>Year Recorded: <strong className="text-ink-700">{row.year}</strong></span>}
+                          {row.year && <span>Year Missed/Recorded: <strong className="text-ink-700">{row.year}</strong></span>}
+                          {panel === "missed" && isClosed && (
+                            <span className="text-red-700 font-medium bg-red-50 px-2 py-0.5 rounded text-[11px] border border-red-200">
+                              Missed Application Deadline
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -315,9 +409,11 @@ export default function SchemeProfile() {
                             <SecondaryButton type="button" onClick={() => fetchSuggestion(row.id)}>
                               <Sparkles size={13} /> AI Suggestion
                             </SecondaryButton>
-                            <SecondaryButton type="button" onClick={() => handleApplyCitizen(row.id)}>
-                              <Send size={13} /> Apply Now
-                            </SecondaryButton>
+                            {!isClosed && (
+                              <SecondaryButton type="button" onClick={() => handleApplyCitizen(row.id)}>
+                                <Send size={13} /> Apply Now
+                              </SecondaryButton>
+                            )}
                           </>
                         )}
                         {panel === "applied" && (
@@ -343,7 +439,7 @@ export default function SchemeProfile() {
                         }}
                       >
                         <div className="flex items-center gap-1.5 font-bold mb-1" style={{ color: "var(--color-gov-blue-700)" }}>
-                          <Sparkles size={13} /> AI Guidance & Alternative Action
+                          <Sparkles size={13} /> AI Recommendation for Citizen
                         </div>
                         {suggestion[row.id]}
                       </div>
@@ -353,7 +449,7 @@ export default function SchemeProfile() {
 
                 {panelRows.length === 0 && (
                   <p className="text-sm text-ink-500 py-6 text-center">
-                    No citizens recorded under this status yet.
+                    No citizens recorded under this status.
                   </p>
                 )}
               </div>
@@ -372,7 +468,7 @@ export default function SchemeProfile() {
             <DetailRow icon={Tags} label="Sector" value={scheme.source_sector} />
             <DetailRow icon={Clock} label="Application Start Date" value={startDate} />
             <DetailRow icon={Clock} label="Application End Date" value={endDate} />
-            <DetailRow icon={ExternalLink} label="Application Portal" value={applyLink} isLink />
+            <DetailRow icon={ExternalLink} label="Official Apply Link" value={applyLink} isLink />
           </div>
         </Card>
 
@@ -481,12 +577,14 @@ function StatBlock({
   value,
   accent,
   active = false,
+  highlight = false,
   onClick,
 }: {
   label: string;
   value: number;
   accent: "blue" | "green" | "saffron";
   active?: boolean;
+  highlight?: boolean;
   onClick?: () => void;
 }) {
   const color =
@@ -507,7 +605,9 @@ function StatBlock({
       type="button"
       onClick={onClick}
       className={`text-left rounded-xl border p-4 bg-white transition-all ${
-        active
+        highlight
+          ? "border-red-300 ring-2 ring-red-400 bg-red-50/20"
+          : active
           ? "ring-2 ring-gov-blue-500 shadow-md border-transparent"
           : "border-ink-200 hover:border-ink-400 hover:shadow-sm"
       }`}

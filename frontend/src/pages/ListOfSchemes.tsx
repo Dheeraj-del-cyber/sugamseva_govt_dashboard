@@ -11,6 +11,10 @@ interface SchemeMasterListItem {
   code?: string;
   name: string;
   applied_count: number;
+  is_open?: boolean;
+  status?: "open" | "closed" | "upcoming";
+  application_start_date?: string;
+  application_end_date?: string;
 }
 
 export default function ListOfSchemes() {
@@ -36,7 +40,7 @@ export default function ListOfSchemes() {
           List of Schemes
         </h2>
         <p className="text-sm text-ink-500 mt-1">
-          Master catalog of government schemes with citizen applications
+          Master catalog of government schemes with application deadlines and citizen participation
         </p>
       </div>
 
@@ -50,7 +54,7 @@ export default function ListOfSchemes() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search schemes by name"
+              placeholder="Search schemes by name or code"
               className="w-full rounded-lg border pl-9 pr-3 py-2.5 text-sm outline-none focus:border-gov-blue-500"
               style={{ borderColor: "var(--color-ink-300)" }}
             />
@@ -63,6 +67,7 @@ export default function ListOfSchemes() {
               <tr className="text-left text-ink-500 text-xs uppercase border-b border-ink-100">
                 <th className="py-2.5 pr-3 font-semibold">Sl.No</th>
                 <th className="py-2.5 pr-3 font-semibold">Scheme Name</th>
+                <th className="py-2.5 pr-3 font-semibold text-center">Status</th>
                 <th className="py-2.5 pr-3 font-semibold text-center">
                   No of People Applied
                 </th>
@@ -83,6 +88,26 @@ export default function ListOfSchemes() {
                     >
                       {r.name}
                     </Link>
+                    {r.application_end_date && (
+                      <p className="text-[11px] text-ink-500 mt-0.5">
+                        Deadline: {r.application_end_date}
+                      </p>
+                    )}
+                  </td>
+                  <td className="py-3 pr-3 text-center">
+                    {r.status === "closed" ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                        Closed
+                      </span>
+                    ) : r.status === "upcoming" ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                        Upcoming
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Open
+                      </span>
+                    )}
                   </td>
                   <td
                     className="py-3 pr-3 text-center font-semibold"
@@ -103,14 +128,14 @@ export default function ListOfSchemes() {
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-ink-500">
+                  <td colSpan={5} className="py-8 text-center text-ink-500">
                     No schemes found.
                   </td>
                 </tr>
               )}
               {loading && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-ink-500">
+                  <td colSpan={5} className="py-8 text-center text-ink-500">
                     Loading schemes...
                   </td>
                 </tr>

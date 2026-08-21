@@ -278,6 +278,10 @@ class SchemeMasterListItem(BaseModel):
     code: Optional[str] = None
     name: str
     applied_count: int
+    is_open: bool = True
+    status: str = "open"  # "open" | "closed" | "upcoming"
+    application_start_date: Optional[str] = None
+    application_end_date: Optional[str] = None
 
 
 class SchemePersonItem(BaseModel):
@@ -312,6 +316,10 @@ class SchemeProfileOut(BaseModel):
     application_start_date: Optional[str] = None
     application_end_date: Optional[str] = None
     apply_url: Optional[str] = None
+    is_open: bool = True
+    status: str = "open"  # "open" | "closed" | "upcoming"
+    status_label: str = "Applications Active"
+    days_remaining: Optional[int] = None
 
 
 class AISuggestionRequest(BaseModel):

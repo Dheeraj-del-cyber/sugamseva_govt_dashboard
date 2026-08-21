@@ -12,6 +12,53 @@ router = APIRouter(prefix="/scheme-list", tags=["List of Schemes"])
 CURRENT_YEAR = datetime.utcnow().year
 
 
+def _format_display_date(date_str: str | None) -> str:
+    if not date_str:
+        return "Ongoing"
+    try:
+        if "-" in date_str and len(date_str.split("-")[0]) == 4:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            return dt.strftime("%d %b %Y")
+    except Exception:
+        pass
+    return date_str
+
+
+def _evaluate_scheme_status(start_date_str: str | None, end_date_str: str | None):
+    """Evaluates whether the scheme is open, closed, or upcoming based on application dates."""
+    today = datetime.utcnow().date()
+    if not end_date_str:
+        return True, "open", "Applications Active", None
+
+    try:
+        if "-" in end_date_str and len(end_date_str.split("-")[0]) == 4:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        else:
+            end_date = datetime.strptime(end_date_str, "%d %b %Y").date()
+    except Exception:
+        return True, "open", "Applications Active", None
+
+    start_date = None
+    if start_date_str:
+        try:
+            if "-" in start_date_str and len(start_date_str.split("-")[0]) == 4:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            else:
+                start_date = datetime.strptime(start_date_str, "%d %b %Y").date()
+        except Exception:
+            start_date = None
+
+    if start_date and today < start_date:
+        days = (start_date - today).days
+        return False, "upcoming", f"Opens on {_format_display_date(start_date_str)}", days
+
+    if today > end_date:
+        return False, "closed", f"Closed on {_format_display_date(end_date_str)}", 0
+
+    days_left = (end_date - today).days
+    return True, "open", f"Open (Closes {_format_display_date(end_date_str)})", days_left
+
+
 def _applied_count(db: Session, scheme_id: str) -> int:
     return (
         db.query(func.count(func.distinct(models.SchemeUsage.citizen_id)))
@@ -38,7 +85,6 @@ def _eligible_citizens(db: Session, scheme: models.Scheme) -> list[models.Citize
     eligible = []
     for c in citizens:
         verified_types = {d.doc_type.lower() for d in c.documents if d.verified}
-        # Citizen matches if they have matching verified documents or Aadhaar Card
         if verified_types and (required.intersection(verified_types) or "aadhaar card" in verified_types):
             eligible.append(c)
     return eligible
@@ -50,7 +96,7 @@ def list_all_schemes(
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
 ):
-    """Every scheme in the master catalog: Sl.No, Scheme Name, No of people applied."""
+    """Every scheme in the master catalog: Sl.No, Scheme Name, Applied Count, Open/Closed status."""
     schemes = db.query(models.Scheme).order_by(models.Scheme.code, models.Scheme.name).all()
     if search:
         like = search.lower()
@@ -58,6 +104,7 @@ def list_all_schemes(
 
     results = []
     for i, s in enumerate(schemes, start=1):
+        is_open, status, _, _ = _evaluate_scheme_status(s.application_start_date, s.application_end_date)
         results.append(
             schemas.SchemeMasterListItem(
                 sl_no=i,
@@ -65,6 +112,10 @@ def list_all_schemes(
                 code=s.code,
                 name=s.name,
                 applied_count=_applied_count(db, s.id),
+                is_open=is_open,
+                status=status,
+                application_start_date=_format_display_date(s.application_start_date),
+                application_end_date=_format_display_date(s.application_end_date),
             )
         )
     return results
@@ -76,8 +127,8 @@ def get_scheme_profile(
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
 ):
-    """Full scheme profile: summary, eligibility criteria (documents, problem
-    category), application window dates, apply URL, and live counts."""
+    """Full scheme profile: summary, eligibility criteria, exact PDF apply URL,
+    application window dates, real-time open/closed status, and updated counts."""
     scheme = db.query(models.Scheme).filter(models.Scheme.id == scheme_id).first()
     if not scheme:
         raise HTTPException(status_code=404, detail="Scheme not found")
@@ -91,13 +142,21 @@ def get_scheme_profile(
 
     missed_count = _missed_count(db, scheme.id)
     applied_count = _applied_count(db, scheme.id)
-    eligible_count = len(_eligible_citizens(db, scheme))
+    eligible_list = _eligible_citizens(db, scheme)
+    eligible_count = len(eligible_list)
+
+    is_open, status, status_label, days_remaining = _evaluate_scheme_status(
+        scheme.application_start_date, scheme.application_end_date
+    )
+
+    # When scheme deadline is completed (closed), all eligible citizens who didn't apply are counted as missed!
+    if not is_open and status == "closed":
+        applied_or_used_ids = {u.citizen_id for u in scheme.usages if u.status in ("applied", "used")}
+        unapplied_eligible = len([c for c in eligible_list if c.id not in applied_or_used_ids])
+        missed_count = max(missed_count, unapplied_eligible)
 
     candidate_docs = [d.strip() for d in (scheme.candidate_documents or "").split(";") if d.strip()]
-
-    start_date = scheme.application_start_date or "01 Apr 2025"
-    end_date = scheme.application_end_date or "31 Mar 2026"
-    apply_url = scheme.apply_url or f"https://www.myscheme.gov.in/schemes/{(scheme.code or 'scheme').lower()}"
+    apply_url = scheme.apply_url or "https://www.myscheme.gov.in/"
 
     return schemas.SchemeProfileOut(
         id=scheme.id,
@@ -119,9 +178,13 @@ def get_scheme_profile(
         used_count=used_count,
         missed_count=missed_count,
         eligible_count=eligible_count,
-        application_start_date=start_date,
-        application_end_date=end_date,
+        application_start_date=_format_display_date(scheme.application_start_date),
+        application_end_date=_format_display_date(scheme.application_end_date),
         apply_url=apply_url,
+        is_open=is_open,
+        status=status,
+        status_label=status_label,
+        days_remaining=days_remaining,
     )
 
 
@@ -131,20 +194,47 @@ def scheme_missed_by(
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
 ):
-    """Returns citizens who missed this scheme."""
+    """Returns citizens who missed this scheme (recorded missed + unapplied eligible if closed)."""
     scheme = db.query(models.Scheme).filter(models.Scheme.id == scheme_id).first()
     if not scheme:
         raise HTTPException(status_code=404, detail="Scheme not found")
-    missed = [u for u in scheme.usages if u.status == "missed"]
-    return [
+
+    is_open, status, _, _ = _evaluate_scheme_status(
+        scheme.application_start_date, scheme.application_end_date
+    )
+
+    recorded_missed = [u for u in scheme.usages if u.status == "missed"]
+    missed_citizen_ids = {u.citizen_id for u in recorded_missed}
+
+    results = [
         schemas.SchemePersonItem(
             id=u.citizen.id,
             full_name=u.citizen.full_name,
             phone_number=u.citizen.phone_number,
             year=u.year,
         )
-        for u in missed
+        for u in recorded_missed
     ]
+
+    # If scheme deadline has passed (closed), all eligible citizens who did not apply missed this scheme!
+    if not is_open and status == "closed":
+        applied_or_used_ids = {
+            u.citizen_id for u in scheme.usages if u.status in ("applied", "used")
+        }
+        eligible = _eligible_citizens(db, scheme)
+        for c in eligible:
+            if c.id not in applied_or_used_ids and c.id not in missed_citizen_ids:
+                results.append(
+                    schemas.SchemePersonItem(
+                        id=c.id,
+                        full_name=c.full_name,
+                        phone_number=c.phone_number,
+                        year=CURRENT_YEAR,
+                    )
+                )
+                missed_citizen_ids.add(c.id)
+
+    return results
 
 
 @router.get("/{scheme_id}/used", response_model=list[schemas.SchemePersonItem])
@@ -219,10 +309,19 @@ def apply_scheme_profile(
     db: Session = Depends(get_db),
     current: models.Official = Depends(get_current_official),
 ):
-    """Enrolls citizens into the scheme."""
+    """Enrolls citizens into the scheme if currently open."""
     scheme = db.query(models.Scheme).filter(models.Scheme.id == scheme_id).first()
     if not scheme:
         raise HTTPException(status_code=404, detail="Scheme not found")
+
+    is_open, status, status_label, _ = _evaluate_scheme_status(
+        scheme.application_start_date, scheme.application_end_date
+    )
+    if not is_open:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Applications for {scheme.name} are currently closed ({status_label}).",
+        )
 
     target_ids = payload.citizen_ids
     if not target_ids:
@@ -242,7 +341,9 @@ def apply_scheme_profile(
         if existing:
             existing.status = "applied"
         else:
-            usage = models.SchemeUsage(scheme_id=scheme_id, citizen_id=cid, year=CURRENT_YEAR, status="applied")
+            usage = models.SchemeUsage(
+                scheme_id=scheme_id, citizen_id=cid, year=CURRENT_YEAR, status="applied"
+            )
             db.add(usage)
         applied.append(cid)
 
