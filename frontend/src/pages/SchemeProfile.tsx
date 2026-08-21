@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  FileText,
   Landmark,
   CalendarDays,
   Layers,
@@ -65,7 +64,7 @@ export default function SchemeProfile() {
           )}
           <h2 className="font-display text-2xl font-bold text-ink-900">{scheme.name}</h2>
           {scheme.source_summary && (
-            <p className="text-sm text-ink-500 mt-3 max-w-2xl mx-auto">{scheme.source_summary}</p>
+            <p className="text-sm text-ink-500 mt-3 max-w-2xl mx-auto leading-relaxed">{scheme.source_summary}</p>
           )}
         </Card>
 
@@ -75,7 +74,7 @@ export default function SchemeProfile() {
           <StatBlock label="People Who Used" value={scheme.used_count} accent="green" />
         </div>
 
-        {/* Core scheme details, straight from the master schemes workbook */}
+        {/* Core scheme details */}
         <Card className="p-5">
           <h3 className="font-display font-bold text-ink-900 mb-4">Scheme Details</h3>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -83,8 +82,7 @@ export default function SchemeProfile() {
             <DetailRow icon={Layers} label="Government Level" value={scheme.government_level} />
             <DetailRow icon={Tags} label="Scheme Type" value={scheme.scheme_type} />
             <DetailRow icon={CalendarDays} label="Year of Launch" value={scheme.year_of_launch} />
-            <DetailRow icon={Tags} label="Source Sector" value={scheme.source_sector} />
-            <DetailRow icon={FileText} label="Source" value={scheme.source} />
+            <DetailRow icon={Tags} label="Sector" value={scheme.source_sector} />
           </div>
         </Card>
 
@@ -144,10 +142,6 @@ export default function SchemeProfile() {
             )}
           </div>
         </Card>
-
-        {scheme.data_source && (
-          <p className="text-xs text-ink-500 text-center">Data source: {scheme.data_source}</p>
-        )}
       </div>
     </Layout>
   );

@@ -92,12 +92,9 @@ def get_scheme_detail(scheme_id: str, db: Session = Depends(get_db), current: mo
 
     if not scheme.summary:
         ai_result = ai.summarize_scheme(scheme.name)
-        pros, cons = ai_result.get("pros", []), ai_result.get("cons", [])
         summary = ai_result.get("summary", "")
     else:
         summary = scheme.summary
-        pros = [p for p in (scheme.pros or "").split("\n") if p]
-        cons = [c for c in (scheme.cons or "").split("\n") if c]
 
     return schemas.SchemeDetailOut(
         id=scheme.id,
@@ -106,8 +103,8 @@ def get_scheme_detail(scheme_id: str, db: Session = Depends(get_db), current: mo
         ministry=scheme.ministry,
         benefit_amount=scheme.benefit_amount,
         summary=summary,
-        pros=pros,
-        cons=cons,
+        pros=[],
+        cons=[],
         eligible_not_applied=len(not_applied),
         used_count=len(used_ids),
         missed_count=missed,

@@ -259,8 +259,8 @@ class SchemeDetailOut(BaseModel):
     ministry: Optional[str] = None
     benefit_amount: Optional[str] = None
     summary: Optional[str]
-    pros: List[str]
-    cons: List[str]
+    pros: Optional[List[str]] = []
+    cons: Optional[List[str]] = []
     eligible_not_applied: int
     used_count: int
     missed_count: int
