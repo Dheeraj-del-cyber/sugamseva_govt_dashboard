@@ -97,6 +97,7 @@ def get_problem_users(problem_id: str, db: Session = Depends(get_db), current: m
                 phone_number=v.citizen.phone_number,
                 address=v.citizen.address,
                 voted_at=v.created_at,
+                solved=v.solved,
             )
         )
     return results
