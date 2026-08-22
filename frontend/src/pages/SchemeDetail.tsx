@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Sparkles, Users, Send } from "lucide-react";
+import { Users, Send } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, PrimaryButton, SecondaryButton } from "../components/UI";
 import { api } from "../api/client";
@@ -28,7 +28,6 @@ export default function SchemeDetail() {
   const [panel, setPanel] = useState<PanelKind>(null);
   const [panelRows, setPanelRows] = useState<PersonRow[]>([]);
   const [applying, setApplying] = useState(false);
-  const [suggestion, setSuggestion] = useState<Record<string, string>>({});
 
   const load = () => {
     if (!schemeId) return;
@@ -59,11 +58,6 @@ export default function SchemeDetail() {
     await api.post(`/schemes/${schemeId}/apply`, { citizen_ids: [citizenId] });
     load();
     openPanel("eligible");
-  };
-
-  const fetchSuggestion = async (citizenId: string) => {
-    const { data } = await api.get(`/schemes/${schemeId}/ai-suggestions`, { params: { citizen_id: citizenId } });
-    setSuggestion((prev) => ({ ...prev, [citizenId]: data.suggestion }));
   };
 
   if (!scheme) {
@@ -123,21 +117,8 @@ export default function SchemeDetail() {
                           <Send size={13} /> Apply
                         </SecondaryButton>
                       )}
-                      {panel === "missed" && (
-                        <SecondaryButton type="button" onClick={() => fetchSuggestion(row.id)}>
-                          <Sparkles size={13} /> AI Suggestion
-                        </SecondaryButton>
-                      )}
                     </div>
                   </div>
-                  {panel === "missed" && suggestion[row.id] && (
-                    <p
-                      className="mt-3 text-xs rounded-lg p-3"
-                      style={{ backgroundColor: "var(--color-gov-blue-100)", color: "var(--color-navy-900)" }}
-                    >
-                      {suggestion[row.id]}
-                    </p>
-                  )}
                 </div>
               ))}
               {panelRows.length === 0 && <p className="text-sm text-ink-500 py-4 text-center">No records to show.</p>}

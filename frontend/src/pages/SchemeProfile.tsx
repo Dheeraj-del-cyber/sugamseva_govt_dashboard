@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Copy,
   Check,
-  Sparkles,
   Send,
   AlertCircle,
   Clock,
@@ -65,7 +64,6 @@ export default function SchemeProfile() {
   const [panel, setPanel] = useState<PanelKind>("missed");
   const [panelRows, setPanelRows] = useState<PersonRow[]>([]);
   const [loadingPanel, setLoadingPanel] = useState(false);
-  const [suggestion, setSuggestion] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applySuccess, setApplySuccess] = useState<string | null>(null);
@@ -147,21 +145,6 @@ export default function SchemeProfile() {
     }
   };
 
-  const fetchSuggestion = async (citizenId: string) => {
-    if (!schemeId) return;
-    try {
-      const { data } = await api.get(`/scheme-list/${schemeId}/ai-suggestions`, {
-        params: { citizen_id: citizenId },
-      });
-      setSuggestion((prev) => ({ ...prev, [citizenId]: data.suggestion }));
-    } catch {
-      setSuggestion((prev) => ({
-        ...prev,
-        [citizenId]: "Unable to generate suggestion at this time. Verify citizen documents on official portal.",
-      }));
-    }
-  };
-
   if (!scheme) {
     return (
       <Layout title="Scheme Profile" backTo={{ to: "/scheme-list", label: "Back to List of Schemes" }}>
@@ -228,7 +211,7 @@ export default function SchemeProfile() {
               <p className="font-bold text-sm text-red-950">Application Period Completed</p>
               <p className="mt-1 leading-relaxed">
                 The application deadline for this scheme closed on <strong>{endDate}</strong>. New applications cannot be submitted.
-                Below is the list of eligible citizens who <strong>missed this scheme</strong> and did not receive the benefit in time. Use the AI suggestions to recommend available alternative schemes.
+                Below is the list of eligible citizens who <strong>missed this scheme</strong> and did not receive the benefit in time.
               </p>
             </div>
           </div>
@@ -409,17 +392,10 @@ export default function SchemeProfile() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {panel === "missed" && (
-                          <>
-                            <SecondaryButton type="button" onClick={() => fetchSuggestion(row.id)}>
-                              <Sparkles size={13} /> AI Suggestion
-                            </SecondaryButton>
-                            {!isClosed && (
-                              <SecondaryButton type="button" onClick={() => handleApplyCitizen(row.id)}>
-                                <Send size={13} /> Apply Now
-                              </SecondaryButton>
-                            )}
-                          </>
+                        {panel === "missed" && !isClosed && (
+                          <SecondaryButton type="button" onClick={() => handleApplyCitizen(row.id)}>
+                            <Send size={13} /> Apply Now
+                          </SecondaryButton>
                         )}
                         {panel === "applied" && (
                           <span className="text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-200">
@@ -433,22 +409,6 @@ export default function SchemeProfile() {
                         )}
                       </div>
                     </div>
-
-                    {panel === "missed" && suggestion[row.id] && (
-                      <div
-                        className="mt-3 text-xs rounded-lg p-3 border leading-relaxed"
-                        style={{
-                          backgroundColor: "var(--color-gov-blue-50)",
-                          borderColor: "var(--color-gov-blue-200)",
-                          color: "var(--color-navy-900)",
-                        }}
-                      >
-                        <div className="flex items-center gap-1.5 font-bold mb-1" style={{ color: "var(--color-gov-blue-700)" }}>
-                          <Sparkles size={13} /> AI Recommendation for Citizen
-                        </div>
-                        {suggestion[row.id]}
-                      </div>
-                    )}
                   </div>
                 ))}
 
