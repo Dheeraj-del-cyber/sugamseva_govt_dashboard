@@ -2,7 +2,7 @@
 
 **Sugam Seva** ("easy service") is a Government of India platform for multilingual
 access to government services and schemes. This repo contains the **Government
-Official Dashboard** (the 9 screens you specified: Sign In, Sign Up, Dashboard,
+Official Dashboard** (the 9 screens you specified: Sign in, Sign up, Dashboard,
 Add User, List of Users, User Profile, Vote of Problems, Problem Details, and
 Schemes), backed by a full FastAPI + PostgreSQL backend.
 
@@ -56,7 +56,7 @@ uvicorn app.main:app --reload --port 8000   # creates an empty sugamseva.db on f
 ```
 
 API docs: http://localhost:8000/docs
-No officials exist until you register one — use the Sign Up screen (or `POST /auth/register`) to create the first official account.
+No officials exist until you register one — use the Sign up screen (or `POST /auth/register`) to create the first official account.
 
 ### 2. Frontend
 
