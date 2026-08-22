@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Fingerprint,
   Lock,
@@ -18,6 +18,9 @@ import {
   X,
   AlertTriangle,
   Plus,
+  Landmark,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { Card, StatusPill, SecondaryButton, PrimaryButton, TextField } from "../components/UI";
@@ -65,6 +68,28 @@ interface CitizenProblemItem {
   reported_at: string;
 }
 
+interface CitizenNearSchemeItem {
+  id: string;
+  code?: string;
+  name: string;
+  category?: string;
+  ministry?: string;
+  summary?: string;
+  benefit_amount?: string;
+  is_open: boolean;
+  status: "open" | "closed" | "upcoming";
+  status_label: string;
+  application_end_date?: string;
+  apply_url?: string;
+  matched_documents: string[];
+  missing_documents: string[];
+  match_count: number;
+  total_docs_count: number;
+  match_percentage: number;
+  is_eligible: boolean;
+  user_usage_status: string;
+}
+
 interface Profile {
   id: string;
   full_name: string;
@@ -79,6 +104,8 @@ interface Profile {
   total_problems: number;
   problems_solved: number;
   problems_pending: number;
+  near_schemes_count?: number;
+  eligible_schemes_count?: number;
 }
 
 export default function UserProfile() {
@@ -86,6 +113,11 @@ export default function UserProfile() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [citizenProblems, setCitizenProblems] = useState<CitizenProblemItem[]>([]);
+  const [nearSchemes, setNearSchemes] = useState<CitizenNearSchemeItem[]>([]);
+  const [loadingNearSchemes, setLoadingNearSchemes] = useState(false);
+  const [schemeFilter, setSchemeFilter] = useState<"all" | "eligible" | "missing">("all");
+  const [schemeSearch, setSchemeSearch] = useState("");
+
   const [unlocked, setUnlocked] = useState(false);
   const [matchedFingerName, setMatchedFingerName] = useState<string | null>(null);
   const [revealedDocs, setRevealedDocs] = useState<Record<string, DocumentOut>>({});
@@ -127,9 +159,6 @@ export default function UserProfile() {
       .catch(() => setDocCatalog([]));
   }, []);
 
-  // Only offer document types not already in this citizen's vault, filtered
-  // as the official types a letter (e.g. typing "a" surfaces Aadhaar Card,
-  // Anganwadi Registration, APAAR ID, etc.)
   const uploadedTypeNames = new Set(profile?.documents.map((d) => d.doc_type) || []);
   const docTypeOptions = docCatalog.filter(
     (d) =>
@@ -138,16 +167,34 @@ export default function UserProfile() {
   );
 
   const loadProfile = () => {
-    if (userId) api.get(`/users/${userId}`).then(({ data }) => setProfile(data));
+    if (userId) {
+      api.get(`/users/${userId}`).then(({ data }) => setProfile(data));
+    }
   };
 
   const loadCitizenProblems = () => {
-    if (userId) api.get(`/users/${userId}/problems`).then(({ data }) => setCitizenProblems(data));
+    if (userId) {
+      api.get(`/users/${userId}/problems`).then(({ data }) => setCitizenProblems(data));
+    }
+  };
+
+  const loadNearSchemes = () => {
+    if (userId) {
+      setLoadingNearSchemes(true);
+      api
+        .get(`/users/${userId}/near-schemes`)
+        .then(({ data }) => {
+          setNearSchemes(data);
+          setLoadingNearSchemes(false);
+        })
+        .catch(() => setLoadingNearSchemes(false));
+    }
   };
 
   useEffect(() => {
     loadProfile();
     loadCitizenProblems();
+    loadNearSchemes();
   }, [userId]);
 
   const handleDeleteCitizen = async () => {
@@ -168,15 +215,23 @@ export default function UserProfile() {
     if (!userId || !profile) return;
     setUnlocking(true);
     try {
-      // One fresh fingerprint scan mints a fingerprint-verification-token that
-      // is used to reveal every document in the vault - the server still
-      // requires that token (via /reveal) to mint the actual file access
-      // token, so nothing is viewable without this scan having happened.
       const results = await Promise.all(
         profile.documents.map((d) =>
           api
-            .post(`/users/${userId}/documents/${d.id}/reveal`, { fingerprint_verification_token: token })
-            .then(({ data }) => ({ id: d.id, doc: { ...d, file_url: data.file_url, file_name: data.file_name, file_size: data.file_size, mime_type: data.mime_type, extracted_text: data.extracted_text } }))
+            .post(`/users/${userId}/documents/${d.id}/reveal`, {
+              fingerprint_verification_token: token,
+            })
+            .then(({ data }) => ({
+              id: d.id,
+              doc: {
+                ...d,
+                file_url: data.file_url,
+                file_name: data.file_name,
+                file_size: data.file_size,
+                mime_type: data.mime_type,
+                extracted_text: data.extracted_text,
+              },
+            }))
             .catch(() => null)
         )
       );
@@ -190,6 +245,15 @@ export default function UserProfile() {
     } finally {
       setUnlocking(false);
     }
+  };
+
+  const handleOpenUploadForMissingDoc = (docTypeName: string) => {
+    setUploadDocType(docTypeName);
+    setDocTypeSearch(docTypeName);
+    setUploadDocNumber("");
+    setUploadFile(null);
+    setUploadError("");
+    setShowUploadModal(true);
   };
 
   const handleUploadAdditionalDoc = async (e: React.FormEvent) => {
@@ -217,6 +281,7 @@ export default function UserProfile() {
       setDocTypeSearch("Aadhaar Card");
       setUploadDocType("Aadhaar Card");
       loadProfile();
+      loadNearSchemes();
     } catch (err: any) {
       setUploadError(err?.response?.data?.detail || "Upload failed");
     } finally {
@@ -246,6 +311,7 @@ export default function UserProfile() {
       setShowAddProblemModal(false);
       loadCitizenProblems();
       loadProfile();
+      loadNearSchemes();
     } catch (err: any) {
       setProblemError(err?.response?.data?.detail || "Failed to add problem");
     } finally {
@@ -267,6 +333,23 @@ export default function UserProfile() {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+  const eligibleSchemesCount = nearSchemes.filter((s) => s.is_eligible).length;
+  const missingSchemesCount = nearSchemes.filter((s) => s.missing_documents.length > 0).length;
+
+  const filteredSchemes = nearSchemes.filter((s) => {
+    if (schemeFilter === "eligible" && !s.is_eligible) return false;
+    if (schemeFilter === "missing" && s.missing_documents.length === 0) return false;
+    if (schemeSearch.trim()) {
+      const q = schemeSearch.toLowerCase().trim();
+      const matchName = s.name.toLowerCase().includes(q);
+      const matchCode = (s.code || "").toLowerCase().includes(q);
+      const matchCat = (s.category || "").toLowerCase().includes(q);
+      const matchMinistry = (s.ministry || "").toLowerCase().includes(q);
+      if (!matchName && !matchCode && !matchCat && !matchMinistry) return false;
+    }
+    return true;
+  });
 
   return (
     <Layout title="Citizen Profile" backTo={{ to: "/users", label: "Back to Users" }}>
@@ -294,6 +377,9 @@ export default function UserProfile() {
                 </span>
                 <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 flex items-center gap-1">
                   <FileText size={12} /> {profile.documents.filter((d) => d.verified).length} Verified Documents
+                </span>
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
+                  <Landmark size={12} /> {nearSchemes.length} Near Schemes ({eligibleSchemesCount} Eligible)
                 </span>
               </div>
             </div>
@@ -362,6 +448,392 @@ export default function UserProfile() {
             </p>
           </Card>
         </div>
+
+        {/* Section: Verified Documents Vault */}
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-display font-bold text-ink-900 flex items-center gap-2">
+                <FileText size={18} style={{ color: "var(--color-gov-blue-600)" }} /> Scanned Government Documents Vault
+              </h3>
+              <p className="text-xs text-ink-500 mt-0.5">
+                Physical files stored securely. Biometric verification unlocks real PDF &amp; image view.
+              </p>
+            </div>
+            {unlocked && (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-800 flex items-center gap-1">
+                <CheckCircle2 size={13} /> Unlocked via {matchedFingerName || "Fingerprint"}
+              </span>
+            )}
+          </div>
+
+          {/* Documents Grid */}
+          <div className="grid sm:grid-cols-2 gap-3.5 mb-5">
+            {profile.documents.map((d) => (
+              <div
+                key={d.id}
+                className="p-4 rounded-xl border border-ink-200 bg-white hover:border-ink-300 transition-all flex flex-col justify-between"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-lg bg-gov-blue-100 text-gov-blue-700 flex items-center justify-center shrink-0">
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-ink-900">{d.doc_type}</p>
+                      <p className="text-[11px] text-ink-500">
+                        {d.doc_number ? `ID: ${d.doc_number}` : "Verified Document"}
+                      </p>
+                    </div>
+                  </div>
+                  <StatusPill status="verified" />
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-ink-100 flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-ink-500 truncate max-w-[140px]">
+                    {d.file_name || `${d.doc_type}.pdf`}
+                  </span>
+
+                  {unlocked && revealedDocs[d.id] ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDocForView(revealedDocs[d.id])}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-white transition-colors"
+                        style={{ backgroundColor: "var(--color-gov-blue-600)" }}
+                      >
+                        <Eye size={12} /> View File
+                      </button>
+                      {revealedDocs[d.id].file_url && (
+                        <a
+                          href={
+                            revealedDocs[d.id].file_url!.startsWith("http")
+                              ? revealedDocs[d.id].file_url!
+                              : `${API_BASE_URL}${revealedDocs[d.id].file_url}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={d.file_name || `${d.doc_type}.pdf`}
+                          className="p-1 rounded-md border border-ink-200 text-ink-700 hover:bg-ink-100"
+                          title="Download document"
+                        >
+                          <Download size={13} />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] font-medium text-ink-400 flex items-center gap-1">
+                      <Lock size={12} /> Protected
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Biometric Unlock Banner */}
+          {!unlocked ? (
+            <div className="rounded-2xl p-6 bg-linear-to-b from-ink-100/70 to-ink-50 border border-ink-200 flex flex-col items-center text-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-navy-900 text-white flex items-center justify-center shadow-xs" style={{ backgroundColor: "var(--color-navy-900)" }}>
+                <Lock size={20} style={{ color: "var(--color-saffron-500)" }} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-ink-900">
+                  Document Scans Protected by National Privacy Safeguards
+                </p>
+                <p className="text-xs text-ink-500 max-w-md mt-1">
+                  Authenticate using the citizen&apos;s registered fingerprint (Right Thumb or Left Thumb) on
+                  the hardware sensor to preview or download document proofs.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVerifyModal(true)}
+                disabled={unlocking}
+                className="mt-1 inline-flex items-center gap-2 text-xs font-bold px-5 py-2.5 rounded-xl text-white shadow-sm hover:opacity-95 transition-all disabled:opacity-60"
+                style={{ backgroundColor: "var(--color-navy-900)" }}
+              >
+                <Fingerprint size={16} /> {unlocking ? "Verifying Fingerprint..." : "Authenticate with Fingerprint Sensor"}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-xl p-4 bg-green-100/70 border border-green-200 text-green-900 text-xs font-medium flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-green-600 shrink-0" />
+                <span>
+                  Biometric authorization active. All stored PDF &amp; image files are unlocked and viewable.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setUnlocked(false);
+                  setRevealedDocs({});
+                }}
+                className="font-bold underline text-green-950"
+              >
+                Lock Vault
+              </button>
+            </div>
+          )}
+        </Card>
+
+        {/* ========================================================================= */}
+        {/* NEW SECTION: Schemes Near Citizen (Eligibility & Missing Documents) */}
+        {/* ========================================================================= */}
+        <Card className="p-5 border-2" style={{ borderColor: "var(--color-gov-blue-200, #bfdbfe)" }}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Landmark size={20} style={{ color: "var(--color-gov-blue-600)" }} />
+                <h3 className="font-display font-bold text-lg text-ink-900">
+                  Schemes Near {profile.full_name}
+                </h3>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gov-blue-100 text-gov-blue-700">
+                  {nearSchemes.length} Near Schemes
+                </span>
+              </div>
+              <p className="text-xs text-ink-500 mt-1">
+                National welfare schemes mapped to citizen&apos;s verified documents. Review matched credentials and upload missing documents to achieve full eligibility.
+              </p>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-1 bg-ink-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setSchemeFilter("all")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  schemeFilter === "all"
+                    ? "bg-white text-ink-900 shadow-xs"
+                    : "text-ink-600 hover:text-ink-900"
+                }`}
+              >
+                All ({nearSchemes.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSchemeFilter("eligible")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  schemeFilter === "eligible"
+                    ? "bg-white text-green-800 shadow-xs"
+                    : "text-ink-600 hover:text-green-800"
+                }`}
+              >
+                Eligible ({eligibleSchemesCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSchemeFilter("missing")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  schemeFilter === "missing"
+                    ? "bg-white text-amber-800 shadow-xs"
+                    : "text-ink-600 hover:text-amber-800"
+                }`}
+              >
+                Missing Docs ({missingSchemesCount})
+              </button>
+            </div>
+          </div>
+
+          {/* Search bar inside Near Schemes */}
+          <div className="relative mb-4">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+            <input
+              type="text"
+              value={schemeSearch}
+              onChange={(e) => setSchemeSearch(e.target.value)}
+              placeholder="Search near schemes by name, ministry, or problem category..."
+              className="w-full text-xs font-medium rounded-xl border pl-8 pr-3 py-2 outline-none focus:border-gov-blue-500 bg-white"
+              style={{ borderColor: "var(--color-ink-300)" }}
+            />
+          </div>
+
+          {loadingNearSchemes ? (
+            <p className="text-xs text-ink-400 py-6 text-center">Loading matching schemes for citizen...</p>
+          ) : filteredSchemes.length === 0 ? (
+            <div className="text-center py-8 bg-ink-50/60 rounded-xl border border-ink-200">
+              <Landmark size={28} className="mx-auto text-ink-400 mb-2" />
+              <p className="text-xs font-semibold text-ink-800">No schemes found matching the criteria</p>
+              <p className="text-[11px] text-ink-400 mt-0.5">Try clearing filters or search terms.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredSchemes.map((s) => (
+                <div
+                  key={s.id}
+                  className="p-4 rounded-xl border bg-white hover:border-ink-300 transition-all space-y-3 shadow-2xs"
+                  style={{
+                    borderColor: s.is_eligible
+                      ? "var(--color-green-300, #86efac)"
+                      : "var(--color-ink-200)",
+                  }}
+                >
+                  {/* Scheme Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {s.code && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gov-blue-100 text-gov-blue-700">
+                            {s.code}
+                          </span>
+                        )}
+                        <Link
+                          to={`/scheme-list/${s.id}`}
+                          className="text-sm font-bold text-ink-900 hover:text-gov-blue-600 transition-colors"
+                        >
+                          {s.name}
+                        </Link>
+                        {s.category && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ink-100 text-ink-700">
+                            {s.category}
+                          </span>
+                        )}
+                      </div>
+                      {s.ministry && (
+                        <p className="text-[11px] text-ink-500 font-medium mt-0.5">
+                          {s.ministry}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Eligibility Badge */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {s.is_eligible ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-800 border border-green-200">
+                          <CheckCircle2 size={12} className="text-green-600" />
+                          Fully Eligible
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                          <AlertCircle size={12} className="text-amber-600" />
+                          {s.missing_documents.length} Document{s.missing_documents.length === 1 ? "" : "s"} Missing
+                        </span>
+                      )}
+                      {s.status === "open" ? (
+                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Open
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
+                          Closed
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Summary preview */}
+                  {s.summary && (
+                    <p className="text-xs text-ink-600 line-clamp-2 leading-relaxed">
+                      {s.summary}
+                    </p>
+                  )}
+
+                  {/* Matched Documents & Missing Documents Sections */}
+                  <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-ink-100">
+                    {/* Matched Documents */}
+                    <div className="p-3 rounded-lg bg-emerald-50/60 border border-emerald-200">
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        <span className="text-[11px] font-bold text-emerald-900 flex items-center gap-1">
+                          <CheckCircle2 size={12} className="text-emerald-600" />
+                          Matched Documents ({s.matched_documents.length})
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700">Verified</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {s.matched_documents.length > 0 ? (
+                          s.matched_documents.map((doc, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white text-emerald-800 border border-emerald-300 shadow-2xs"
+                            >
+                              <CheckCircle2 size={10} className="text-emerald-600" />
+                              {doc}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-ink-400 italic">No matching documents yet</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Missing Documents */}
+                    <div className="p-3 rounded-lg bg-amber-50/60 border border-amber-200">
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                          <AlertCircle size={12} className="text-amber-600" />
+                          Missing Documents ({s.missing_documents.length})
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-700">Action Required</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {s.missing_documents.length > 0 ? (
+                          s.missing_documents.map((doc, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => handleOpenUploadForMissingDoc(doc)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors shadow-2xs group/btn text-left"
+                              title="Click to upload this missing document"
+                            >
+                              <AlertCircle size={10} className="text-amber-600" />
+                              <span>{doc}</span>
+                              <UploadCloud size={10} className="text-amber-700 opacity-70 group-hover/btn:opacity-100 ml-0.5" />
+                            </button>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-green-700 font-semibold flex items-center gap-1">
+                            <CheckCircle2 size={11} /> All required documents verified!
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scheme Action Buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-2 text-xs text-ink-500">
+                      {s.application_end_date && (
+                        <span>Deadline: <strong className="text-ink-700">{s.application_end_date}</strong></span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {s.missing_documents.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenUploadForMissingDoc(s.missing_documents[0])}
+                          className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors"
+                        >
+                          <UploadCloud size={13} />
+                          Upload Missing Doc
+                        </button>
+                      )}
+                      <Link
+                        to={`/scheme-list/${s.id}`}
+                        className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-navy-900 text-white hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: "var(--color-navy-900)" }}
+                      >
+                        <Landmark size={13} />
+                        View Scheme Profile
+                      </Link>
+                      {s.apply_url && (
+                        <a
+                          href={s.apply_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-ink-200 text-ink-700 hover:bg-ink-100 transition-colors"
+                        >
+                          <ExternalLink size={12} />
+                          Portal
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
         {/* Section: Problem List (each civic issue this citizen has reported) */}
         <Card className="p-5">
@@ -486,135 +958,6 @@ export default function UserProfile() {
               </>
             )}
           </div>
-        </Card>
-
-        {/* Section: Verified Documents Vault */}
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-display font-bold text-ink-900 flex items-center gap-2">
-                <FileText size={18} style={{ color: "var(--color-gov-blue-600)" }} /> Scanned Government Documents Vault
-              </h3>
-              <p className="text-xs text-ink-500 mt-0.5">
-                Physical files stored on server. Biometric verification unlocks real PDF &amp; image view.
-              </p>
-            </div>
-            {unlocked && (
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-800 flex items-center gap-1">
-                <CheckCircle2 size={13} /> Unlocked via {matchedFingerName || "Fingerprint"}
-              </span>
-            )}
-          </div>
-
-          {/* Documents Grid */}
-          <div className="grid sm:grid-cols-2 gap-3.5 mb-5">
-            {profile.documents.map((d) => (
-              <div
-                key={d.id}
-                className="p-4 rounded-xl border border-ink-200 bg-white hover:border-ink-300 transition-all flex flex-col justify-between"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 rounded-lg bg-gov-blue-100 text-gov-blue-700 flex items-center justify-center shrink-0">
-                      <FileText size={18} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-ink-900">{d.doc_type}</p>
-                      <p className="text-[11px] text-ink-500">
-                        {d.doc_number ? `ID: ${d.doc_number}` : "Verified Document"}
-                      </p>
-                    </div>
-                  </div>
-                  <StatusPill status="verified" />
-                </div>
-
-                <div className="mt-3 pt-3 border-t border-ink-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] text-ink-500 truncate max-w-[140px]">
-                    {d.file_name || `${d.doc_type}.pdf`}
-                  </span>
-
-                  {unlocked && revealedDocs[d.id] ? (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDocForView(revealedDocs[d.id])}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-white transition-colors"
-                        style={{ backgroundColor: "var(--color-gov-blue-600)" }}
-                      >
-                        <Eye size={12} /> View File
-                      </button>
-                      {revealedDocs[d.id].file_url && (
-                        <a
-                          href={
-                            revealedDocs[d.id].file_url!.startsWith("http")
-                              ? revealedDocs[d.id].file_url!
-                              : `${API_BASE_URL}${revealedDocs[d.id].file_url}`
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={d.file_name || `${d.doc_type}.pdf`}
-                          className="p-1 rounded-md border border-ink-200 text-ink-700 hover:bg-ink-100"
-                          title="Download document"
-                        >
-                          <Download size={13} />
-                        </a>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-[11px] font-medium text-ink-400 flex items-center gap-1">
-                      <Lock size={12} /> Protected
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Biometric Unlock Banner */}
-          {!unlocked ? (
-            <div className="rounded-2xl p-6 bg-linear-to-b from-ink-100/70 to-ink-50 border border-ink-200 flex flex-col items-center text-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-navy-900 text-white flex items-center justify-center shadow-xs" style={{ backgroundColor: "var(--color-navy-900)" }}>
-                <Lock size={20} style={{ color: "var(--color-saffron-500)" }} />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-ink-900">
-                  Document Scans Protected by National Privacy Safeguards
-                </p>
-                <p className="text-xs text-ink-500 max-w-md mt-1">
-                  Authenticate using the citizen&apos;s registered fingerprint (Right Thumb or Left Thumb) on
-                  the hardware sensor to preview or download document proofs.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowVerifyModal(true)}
-                disabled={unlocking}
-                className="mt-1 inline-flex items-center gap-2 text-xs font-bold px-5 py-2.5 rounded-xl text-white shadow-sm hover:opacity-95 transition-all disabled:opacity-60"
-                style={{ backgroundColor: "var(--color-navy-900)" }}
-              >
-                <Fingerprint size={16} /> {unlocking ? "Verifying Fingerprint..." : "Authenticate with Fingerprint Sensor"}
-              </button>
-            </div>
-          ) : (
-            <div className="rounded-xl p-4 bg-green-100/70 border border-green-200 text-green-900 text-xs font-medium flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-green-600 shrink-0" />
-                <span>
-                  Biometric authorization active. All stored PDF &amp; image files are unlocked and viewable.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setUnlocked(false);
-                  setRevealedDocs({});
-                }}
-                className="font-bold underline text-green-950"
-              >
-                Lock Vault
-              </button>
-            </div>
-          )}
         </Card>
       </div>
 

@@ -94,9 +94,17 @@ export default function ListOfUsers() {
                   <td className="py-3 pr-3 text-ink-700">{u.phone_number}</td>
                   <td className="py-3 pr-3 text-ink-700">{u.documents_submitted}</td>
                   <td className="py-3 pr-3 text-center text-ink-700">{u.problem_count}</td>
-                  <td className="py-3 pr-3 text-center text-ink-700">{u.schemes_near_count}</td>
+                  <td className="py-3 pr-3 text-center">
+                    <Link
+                      to={`/users/${u.id}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-gov-blue-100 text-gov-blue-700 hover:bg-gov-blue-200 transition-colors"
+                      title="View near schemes on citizen profile"
+                    >
+                      {u.schemes_near_count}
+                    </Link>
+                  </td>
                   <td className="py-3 pr-3 text-right">
-                    <Link to={`/users/${u.id}`} className="text-xs font-semibold" style={{ color: "var(--color-gov-blue-600)" }}>
+                    <Link to={`/users/${u.id}`} className="text-xs font-bold px-2.5 py-1 rounded-md text-white shadow-2xs" style={{ backgroundColor: "var(--color-navy-900)" }}>
                       View
                     </Link>
                   </td>

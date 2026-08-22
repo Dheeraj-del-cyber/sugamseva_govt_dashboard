@@ -29,21 +29,41 @@ def _documents_summary(citizen: models.Citizen) -> str:
     return ", ".join(verified) if verified else "None"
 
 
+def _get_citizen_near_schemes(db: Session, citizen: models.Citizen) -> list[schemas.CitizenNearSchemeItem]:
+    from app.routers.schemes import evaluate_scheme_for_citizen
+
+    verified_docs_display = [d.doc_type for d in citizen.documents if d.verified]
+    verified_docs_lower = {d.lower() for d in verified_docs_display}
+    problem_cats_lower = {
+        v.problem.category.lower() for v in citizen.votes if v.problem and v.problem.category
+    }
+    usage_map = {u.scheme_id: u.status for u in citizen.scheme_usages}
+
+    schemes = db.query(models.Scheme).filter(models.Scheme.active == True).all()  # noqa: E712
+    results = []
+    for s in schemes:
+        evaluated = evaluate_scheme_for_citizen(
+            s, verified_docs_lower, problem_cats_lower, usage_map
+        )
+        if evaluated:
+            results.append(evaluated)
+
+    results.sort(
+        key=lambda x: (x.is_eligible, x.match_count, x.match_percentage, x.is_open),
+        reverse=True,
+    )
+    return results
+
+
 def _schemes_near_count(db: Session, citizen: models.Citizen) -> int:
-    verified_types = {d.doc_type for d in citizen.documents if d.verified}
-    if not verified_types:
-        return 0
-    count = 0
-    for scheme in db.query(models.Scheme).filter(models.Scheme.active == True).all():  # noqa: E712
-        required = {t.strip() for t in (scheme.required_documents or "").split(",") if t.strip()}
-        if required and required.issubset(verified_types):
-            count += 1
-    return count
+    return len(_get_citizen_near_schemes(db, citizen))
 
 
 def _to_profile(db: Session, citizen: models.Citizen) -> schemas.CitizenProfileOut:
     total = len(citizen.votes)
     solved = sum(1 for v in citizen.votes if v.solved)
+    near_schemes = _get_citizen_near_schemes(db, citizen)
+    eligible_count = sum(1 for s in near_schemes if s.is_eligible)
 
     docs_out = []
     for d in citizen.documents:
@@ -93,6 +113,8 @@ def _to_profile(db: Session, citizen: models.Citizen) -> schemas.CitizenProfileO
         total_problems=total,
         problems_solved=solved,
         problems_pending=total - solved,
+        near_schemes_count=len(near_schemes),
+        eligible_schemes_count=eligible_count,
     )
 
 
@@ -243,6 +265,20 @@ def get_user_profile(
     if not citizen:
         raise HTTPException(status_code=404, detail="User not found")
     return _to_profile(db, citizen)
+
+
+@router.get("/{user_id}/near-schemes", response_model=list[schemas.CitizenNearSchemeItem])
+def get_citizen_near_schemes_endpoint(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current: models.Official = Depends(get_current_official),
+):
+    """Returns all near schemes evaluated against this citizen's verified documents,
+    including exact matched documents and missing documents for each scheme."""
+    citizen = db.query(models.Citizen).filter(models.Citizen.id == user_id).first()
+    if not citizen:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _get_citizen_near_schemes(db, citizen)
 
 
 @router.delete("/{user_id}")

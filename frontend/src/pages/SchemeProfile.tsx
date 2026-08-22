@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   Landmark,
   CalendarDays,
@@ -392,7 +392,12 @@ export default function SchemeProfile() {
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-ink-900">{row.full_name}</p>
+                        <Link
+                          to={`/users/${row.id}`}
+                          className="text-sm font-bold text-ink-900 hover:text-gov-blue-600 hover:underline transition-colors"
+                        >
+                          {row.full_name}
+                        </Link>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500 mt-1">
                           {row.phone_number && <span>Phone: <strong className="text-ink-700">{row.phone_number}</strong></span>}
                           {row.year && <span>Year Missed/Recorded: <strong className="text-ink-700">{row.year}</strong></span>}

@@ -143,6 +143,8 @@ class CitizenProfileOut(BaseModel):
     total_problems: int
     problems_solved: int
     problems_pending: int
+    near_schemes_count: int = 0
+    eligible_schemes_count: int = 0
 
 
 class DocumentScanRequest(BaseModel):
@@ -241,15 +243,52 @@ class CitizenProblemItem(BaseModel):
 
 
 # ---------- Schemes --------------------------------------------------
+class TopNearSchemeSummary(BaseModel):
+    id: str
+    code: Optional[str] = None
+    name: str
+    category: Optional[str] = None
+    matched_count: int = 0
+    missing_count: int = 0
+    is_eligible: bool = False
+
+
 class SchemeListItem(BaseModel):
     sl_no: int
     id: str
     name: str
+    phone_number: Optional[str] = None
     category: Optional[str] = None
     ministry: Optional[str] = None
     benefit_amount: Optional[str] = None
     eligible_count: int
+    near_schemes_count: int = 0
     documents_matched: str
+    documents_matched_list: List[str] = []
+    top_near_schemes: List[TopNearSchemeSummary] = []
+
+
+class CitizenNearSchemeItem(BaseModel):
+    """A specific scheme evaluated against one citizen's verified documents."""
+    id: str
+    code: Optional[str] = None
+    name: str
+    category: Optional[str] = None
+    ministry: Optional[str] = None
+    summary: Optional[str] = None
+    benefit_amount: Optional[str] = None
+    is_open: bool = True
+    status: str = "open"  # "open" | "closed" | "upcoming"
+    status_label: str = "Applications Active"
+    application_end_date: Optional[str] = None
+    apply_url: Optional[str] = None
+    matched_documents: List[str] = []
+    missing_documents: List[str] = []
+    match_count: int = 0
+    total_docs_count: int = 0
+    match_percentage: int = 0
+    is_eligible: bool = False
+    user_usage_status: str = "not_applied"  # "not_applied" | "applied" | "used" | "missed"
 
 
 class SchemeDetailOut(BaseModel):
