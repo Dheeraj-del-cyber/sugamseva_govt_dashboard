@@ -41,7 +41,7 @@ export default function Sidebar({ open }: { open: boolean }) {
         />
         <div className="min-w-0">
           <p className="text-[11px] uppercase tracking-wide text-white/60 leading-none">Government of India</p>
-          <p className="font-display font-bold text-sm leading-tight mt-1">Sugam Seva</p>
+          <p className="font-display font-bold text-sm leading-tight mt-1">Sugam Seva(Unofficial)</p>
         </div>
       </div>
 
