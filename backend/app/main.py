@@ -23,7 +23,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this to your dashboard's origin in production
+    allow_origins=["https://sugamseva-govt.netlify.app"],  # tighten this to your dashboard's origin in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
